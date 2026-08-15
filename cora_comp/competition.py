@@ -157,9 +157,9 @@ class CoraCompetition(Competition):
                 tagline="CORA-COMP is a friendly competition to compare the performance of "
                         "different libraries on continuous set representation.",
                 links=[
-                    # The results view is this variant's own page (cora_comp/views.py),
-                    # not part of the shared shell, so it is reached by URL.
-                    {"label": "Results", "url": "/api/cora/results/"},
+                    # This variant's own page (cora_comp/views.py), not part of the
+                    # shared shell — hence a link, but as prominent as the actions.
+                    {"label": "Results", "url": "/api/cora/results/", "primary": True},
                     {"label": "CORA", "url": "https://tumcps.github.io/CORA/"},
                     {"label": "GitHub", "url": "https://github.com/CORA-COMP"},
                 ],

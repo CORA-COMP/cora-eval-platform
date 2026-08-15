@@ -1,3 +1,4 @@
 [submodule "core"]
 	path = core
 	url = https://github.com/TUMcps/core-eval-platform.git
+	branch = feature/primary-landing-links
