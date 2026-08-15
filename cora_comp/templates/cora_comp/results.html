@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results</title>
+<link rel="icon" href="/api/competition/assets/favicon.png">
+<style>
+  /* The shell's look, reproduced for this server-rendered page. Colors and the brand
+     name are not hardcoded: they come from /api/competition/, the same source the React
+     shell boots from, so the two cannot drift on branding. */
+  :root {
+    --primary: #1f2937;
+    --gradient: #1f2937;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --paper: #ffffff;
+    --bg: #f7f8fa;
+    --band: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  a { color: inherit; }
+  .container { max-width: 1536px; margin: 0 auto; padding: 0 24px; }
+
+  /* --- navbar --- */
+  .navbar { background: var(--gradient); color: #fff; }
+  .navbar .container { display: flex; align-items: center; gap: 16px; padding-top: 20px; padding-bottom: 20px; }
+  .brand { font-size: 1.5rem; font-weight: 700; text-decoration: none; letter-spacing: -0.01em; }
+  .spacer { flex: 1; }
+  .menu-wrap { position: relative; }
+  .menu-btn {
+    display: flex; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer;
+    color: inherit; font: inherit; font-weight: 600; padding: 6px 10px; border-radius: 999px;
+  }
+  .menu-btn:hover { background: rgba(255,255,255,.12); }
+  .menu-btn .glyph { font-size: 1.25rem; line-height: 1; }
+  .menu {
+    position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px; z-index: 10;
+    background: var(--paper); color: var(--ink); border-radius: 10px; padding: 8px 0;
+    box-shadow: 0 4px 14px rgba(16,24,40,.14), 0 1px 3px rgba(16,24,40,.08);
+  }
+  .menu[hidden] { display: none; }
+  .menu a, .menu button {
+    display: block; width: 100%; text-align: left; padding: 8px 18px; text-decoration: none;
+    background: none; border: 0; font: inherit; color: inherit; cursor: pointer;
+  }
+  .menu a:hover, .menu button:hover { background: #f3f4f6; }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+
+  /* --- page header band + headline accent --- */
+  .page-header { background: var(--band); padding: 48px 0; }
+  .title-row { display: flex; align-items: flex-end; gap: 16px; }
+  .page-title { margin: 0; font-size: 3rem; font-weight: 700; letter-spacing: -0.015em; }
+  .wave { position: relative; flex: 1; min-width: 24px; height: 5px; margin-bottom: 10px; }
+  .wave svg { position: absolute; left: 0; top: 50%; width: 100%; height: 28px; transform: translateY(-50%); overflow: visible; }
+  .footer-wave { padding: 40px 0; }
+  .footer-wave svg { width: 50%; height: 32px; overflow: visible; display: block; }
+
+  /* --- content --- */
+  main { padding-top: 32px; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+  .card h2 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+  .control label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; }
+  select { font: inherit; font-size: .95rem; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; min-width: 200px; }
+  .toggle { display: flex; align-items: center; gap: 8px; padding-bottom: 9px; font-size: .95rem; }
+  .hint { color: var(--muted); font-size: .875rem; margin: 12px 0 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; }
+  .verdict-finished { color: #2e7d32; }
+  .verdict-unsupported { color: var(--muted); }
+  .verdict-error, .verdict-timeout, .verdict-prepare_failed { color: #c62828; }
+  .scroll { max-height: 560px; overflow: auto; }
+  #plot svg { width: 100%; height: auto; display: block; }
+  .grid { stroke: var(--line); stroke-width: 1; }
+  .axis { stroke: #9ca3af; stroke-width: 1; }
+  .tick { fill: var(--muted); font-size: 11px; }
+  .axis-label { fill: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); padding: 32px 0; text-align: center; }
+
+  footer { margin-top: 48px; padding: 24px 0; text-align: center; background: var(--paper); border-top: 1px solid var(--line); }
+  footer p { margin: 0; font-size: .875rem; color: var(--muted); }
+</style>
+</head>
+<body data-authenticated="{{ authenticated|yesno:"1,0" }}">
+
+<div class="navbar">
+  <div class="container">
+    <a class="brand" href="/" id="brand">Eval Platform</a>
+    <div class="spacer"></div>
+    <div class="menu-wrap">
+      <button class="menu-btn" id="menu-btn" aria-haspopup="true" aria-expanded="false">
+        <span id="menu-user"></span><span class="glyph">&#926;</span>
+      </button>
+      <div class="menu" id="menu" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div class="page-header">
+  <div class="container">
+    <div class="title-row">
+      <h1 class="page-title">Results</h1>
+      <div class="wave"><svg id="crescendo" viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    </div>
+  </div>
+</div>
+
+<main class="container">
+  <div class="card controls">
+    <div class="control">
+      <label for="facet-benchmark">Benchmark</label>
+      <select id="facet-benchmark"><option value="all">all</option></select>
+    </div>
+    <div class="control">
+      <label for="facet-operation">Operation</label>
+      <select id="facet-operation"><option value="all">all</option></select>
+    </div>
+    <div class="toggle">
+      <input type="checkbox" id="include-prepare">
+      <label for="include-prepare" style="margin:0">add prepare time</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Cactus plot</h2>
+    <div id="plot"></div>
+    <p class="hint" id="plot-hint"></p>
+  </div>
+
+  <div class="card">
+    <h2>Tools</h2>
+    <div id="summary"></div>
+  </div>
+
+  <div class="card">
+    <h2>Detailed results</h2>
+    <div class="scroll"><div id="details"></div></div>
+  </div>
+</main>
+
+<div class="container footer-wave">
+  <svg id="footer-wave" viewBox="0 0 320 32" preserveAspectRatio="none" aria-hidden="true"></svg>
+</div>
+<footer><div class="container"><p id="copyright"></p></div></footer>
+
+{% verbatim %}
+<script>
+// CORA's default colors (the MATLAB defaults), as [r,g,b] in 0..1.
+const CORA_COLORS = [
+  [0.0000, 0.4470, 0.7410],  // blue
+  [0.8500, 0.3250, 0.0980],  // red
+  [0.9290, 0.6940, 0.1250],  // yellow
+  [0.4940, 0.1840, 0.5560],  // purple
+  [0.4660, 0.6740, 0.1880],  // green
+  [0.3010, 0.7450, 0.9330],  // light blue
+  [0.6350, 0.0780, 0.1840],  // dark red
+];
+
+const FINISHED = 'finished';
+//: Floor of the log axis. The first point of a series is one instance minus the startup
+//: baseline, which can round to zero; without a floor the axis has no bottom.
+const Y_FLOOR = 1e-3;
+
+const state = { data: null, filters: { benchmark: 'all', operation: 'all' }, includePrepare: false };
+const el = (id) => document.getElementById(id);
+
+function esc(text) {
+  return String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// --- chrome: branding, waves, menu ---------------------------------------
+
+/** The navbar gradient's stops, as the theme parses them (`theme.ts:parseWaveGradient`). */
+function gradientStops(css) {
+  const inner = (css || '').match(/linear-gradient\(([^)]*)\)/i);
+  if (!inner) return null;
+  const parts = inner[1].split(',').map((s) => s.trim());
+  if (/^[-\d.]+deg$/i.test(parts[0]) || /^to\s/i.test(parts[0])) parts.shift();
+  if (parts.length < 2) return null;
+  return parts.map((p, i) => {
+    const [color, offset] = p.split(/\s+/);
+    return { color, offset: offset || `${(i / (parts.length - 1)) * 100}%` };
+  });
+}
+
+/** The headline accent: flat under the text, breaking into full swings at the far right.
+ *  Same geometry as the shell's CrescendoWave. */
+function crescendoPath() {
+  const W = 300, H = 28, MID = H / 2, FLAT = 0.66, AMP = MID - 2, CYCLES = 9, N = 240;
+  let d = '';
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const ramp = t <= FLAT ? 0 : (t - FLAT) / (1 - FLAT);
+    const a = AMP * ramp * ramp;
+    d += `${i === 0 ? 'M' : 'L'}${(t * W).toFixed(2)} ${(MID - a * Math.sin(t * CYCLES * 2 * Math.PI)).toFixed(2)}`;
+  }
+  return d;
+}
+
+/** The closing counterpart: full swings ringing down to a flat line (FooterWave). */
+function dampedPath() {
+  const W = 320, H = 32, MID = H / 2, AMP = MID - 2, CYCLES = 5, DECAY = 3.2, N = 260;
+  let d = '';
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const a = AMP * Math.exp(-DECAY * t);
+    d += `${i === 0 ? 'M' : 'L'}${(t * W).toFixed(2)} ${(MID - a * Math.sin(t * CYCLES * 2 * Math.PI)).toFixed(2)}`;
+  }
+  return d;
+}
+
+function paintWave(svg, path, id, stops, width) {
+  const defs = stops
+    ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0">${stops
+        .map((s) => `<stop offset="${esc(s.offset)}" stop-color="${esc(s.color)}"/>`).join('')}</linearGradient></defs>`
+    : '';
+  svg.innerHTML = `${defs}<path d="${path}" fill="none" stroke="${stops ? `url(#${id})` : 'currentColor'}"
+    stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+}
+
+function renderMenu(user) {
+  const items = [
+    '<a href="/">Home</a>',
+    '<a href="/toolkit">Toolkit</a>',
+    '<a href="/benchmark">Benchmark</a>',
+  ];
+  if (user && user.is_admin) items.push('<a href="/admin">Admin</a>');
+  items.push('<hr>');
+  items.push(user ? '<a href="/account">Account</a>' : '<a href="/login">Log in</a>');
+  if (!user) items.push('<a href="/signup">Sign up</a>');
+  el('menu').innerHTML = items.join('');
+  el('menu-user').textContent = user ? (user.name || user.email) : '';
+}
+
+async function bootChrome() {
+  const year = new Date().getFullYear();
+  let comp = null, user = null;
+  try { comp = await (await fetch('/api/competition/')).json(); } catch { /* keep defaults */ }
+  try {
+    const res = await fetch('/api/auth/me/', { credentials: 'same-origin' });
+    if (res.ok) user = await res.json();
+  } catch { /* anonymous */ }
+
+  const brand = (comp && comp.display_name) || 'Eval Platform';
+  const branding = (comp && comp.presentation && comp.presentation.branding) || {};
+  const stops = gradientStops(branding.navbar_gradient);
+  const root = document.documentElement.style;
+  if (branding.primary_color) root.setProperty('--primary', branding.primary_color);
+  root.setProperty('--gradient', branding.navbar_gradient || branding.primary_color || '#1f2937');
+
+  document.title = `Results — ${brand}`;
+  el('brand').textContent = `${brand} ${year}`;
+  el('copyright').textContent = `© ${brand} ${year}. All rights reserved.`;
+  if (branding.favicon) document.querySelector("link[rel='icon']").href = branding.favicon;
+
+  const waveColor = stops ? null : (branding.primary_color || '#1f2937');
+  for (const svg of [el('crescendo'), el('footer-wave')]) svg.style.color = waveColor || '';
+  paintWave(el('crescendo'), crescendoPath(), 'cwave', stops, 5);
+  paintWave(el('footer-wave'), dampedPath(), 'fwave', stops, 4);
+
+  renderMenu(user);
+  const btn = el('menu-btn'), menu = el('menu');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
+}
+
+// --- colors ---------------------------------------------------------------
+
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+function rgbToHsl(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+// A tool keeps a CORA color, nudged in hue and lightness by a hash of its name — so two
+// tools landing on the same base color stay distinguishable, and the palette stays CORA's.
+function toolColor(name, index) {
+  const [r, g, b] = CORA_COLORS[index % CORA_COLORS.length];
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const seed = hash(name);
+  const hue = (h * 360 + ((seed % 25) - 12) + 360) % 360;
+  const light = Math.min(0.72, Math.max(0.28, l + (((seed >> 5) % 13) - 6) / 100));
+  return `hsl(${hue.toFixed(1)} ${(s * 100).toFixed(0)}% ${(light * 100).toFixed(0)}%)`;
+}
+
+// --- series ---------------------------------------------------------------
+
+function matches(row) {
+  return Object.entries(state.filters).every(([key, value]) =>
+    value === 'all' || row.facets[key] === value);
+}
+
+// The startup cost, estimated as the fastest instance the tool ran — the `test` benchmark
+// exists to be exactly that. Taken over ALL of a tool's instances, not the filtered ones,
+// so changing a selector does not move the baseline under the numbers.
+function baselines(rows) {
+  const byTool = new Map();
+  for (const row of rows) {
+    if (!byTool.has(row.tool)) byTool.set(row.tool, { run: Infinity, prepare: Infinity });
+    const b = byTool.get(row.tool);
+    if (row.result === FINISHED) {
+      if (row.time != null) b.run = Math.min(b.run, row.time);
+      if (row.prepare_time != null) b.prepare = Math.min(b.prepare, row.prepare_time);
+    }
+  }
+  for (const b of byTool.values()) {
+    if (!isFinite(b.run)) b.run = 0;
+    if (!isFinite(b.prepare)) b.prepare = 0;
+  }
+  return byTool;
+}
+
+function cost(row, base) {
+  let value = Math.max(0, (row.time ?? 0) - base.run);
+  if (state.includePrepare) value += Math.max(0, (row.prepare_time ?? 0) - base.prepare);
+  return value;
+}
+
+/** One cactus series per tool: its finished instances sorted by cost, cumulatively summed,
+ *  so the curve reaching furthest right at the lowest height is the fastest tool. */
+function buildSeries() {
+  const all = state.data.measurements;
+  const base = baselines(all);
+  const byTool = new Map();
+  for (const row of all) {
+    if (!matches(row) || row.result !== FINISHED) continue;
+    if (!byTool.has(row.tool)) byTool.set(row.tool, []);
+    byTool.get(row.tool).push(cost(row, base.get(row.tool)));
+  }
+  return state.data.tools
+    .filter((tool) => byTool.has(tool))
+    .map((tool, i) => {
+      const costs = byTool.get(tool).sort((a, b) => a - b);
+      let sum = 0;
+      const points = costs.map((c, idx) => { sum += c; return { x: idx + 1, y: sum }; });
+      return { tool, color: toolColor(tool, i), points, total: sum, base: base.get(tool) };
+    });
+}
+
+// --- plot -----------------------------------------------------------------
+
+function niceTicksLog(lo, hi) {
+  const ticks = [];
+  for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) ticks.push(10 ** e);
+  return ticks.filter((t) => t >= lo * 0.999 && t <= hi * 1.001);
+}
+
+function niceTicksLinear(hi, count) {
+  const step = Math.max(1, Math.ceil(hi / count));
+  const ticks = [];
+  for (let v = 0; v <= hi; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] !== hi) ticks.push(hi);
+  return ticks;
+}
+
+function fmtTime(v) {
+  if (v == null) return '';
+  if (v >= 100) return v.toFixed(0);
+  if (v >= 1) return v.toFixed(2);
+  if (v >= 0.001) return v.toFixed(3);
+  return v.toExponential(1);
+}
+
+function renderPlot(series) {
+  const host = el('plot'), hint = el('plot-hint');
+  if (!series.length) {
+    host.innerHTML = '<p class="empty">No finished instances for this selection.</p>';
+    hint.textContent = '';
+    return;
+  }
+
+  const W = 900, H = 480, M = { top: 16, right: 24, bottom: 48, left: 68 };
+  const xMax = Math.max(...series.map((s) => s.points.length));
+  const yValues = series.flatMap((s) => s.points.map((p) => p.y)).filter((v) => v > 0);
+  const yMin = Math.max(Y_FLOOR, Math.min(...yValues, 1));
+  const yMax = Math.max(...yValues, yMin * 10);
+
+  const px = (x) => M.left + (x / Math.max(1, xMax)) * (W - M.left - M.right);
+  const py = (y) => {
+    const v = Math.max(y, yMin);
+    const t = (Math.log10(v) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin) || 1);
+    return H - M.bottom - t * (H - M.top - M.bottom);
+  };
+
+  const parts = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cactus plot">`];
+  for (const t of niceTicksLog(yMin, yMax)) {
+    parts.push(`<line class="grid" x1="${M.left}" y1="${py(t)}" x2="${W - M.right}" y2="${py(t)}"/>`);
+    parts.push(`<text class="tick" x="${M.left - 8}" y="${py(t) + 4}" text-anchor="end">${fmtTime(t)}</text>`);
+  }
+  for (const t of niceTicksLinear(xMax, 10)) {
+    parts.push(`<line class="grid" x1="${px(t)}" y1="${M.top}" x2="${px(t)}" y2="${H - M.bottom}"/>`);
+    parts.push(`<text class="tick" x="${px(t)}" y="${H - M.bottom + 18}" text-anchor="middle">${t}</text>`);
+  }
+  parts.push(`<line class="axis" x1="${M.left}" y1="${M.top}" x2="${M.left}" y2="${H - M.bottom}"/>`);
+  parts.push(`<line class="axis" x1="${M.left}" y1="${H - M.bottom}" x2="${W - M.right}" y2="${H - M.bottom}"/>`);
+  parts.push(`<text class="axis-label" x="${(M.left + W - M.right) / 2}" y="${H - 10}" text-anchor="middle">instances finished (sorted by cost)</text>`);
+  parts.push(`<text class="axis-label" transform="translate(16 ${(M.top + H - M.bottom) / 2}) rotate(-90)" text-anchor="middle">cumulative time (s, log)</text>`);
+
+  for (const s of series) {
+    const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
+    parts.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round"/>`);
+    const last = s.points[s.points.length - 1];
+    parts.push(`<circle cx="${px(last.x).toFixed(1)}" cy="${py(last.y).toFixed(1)}" r="3.5" fill="${s.color}"/>`);
+  }
+  parts.push('</svg>');
+  host.innerHTML = parts.join('');
+
+  hint.textContent = 'Further right and lower is better: more instances finished for less '
+    + 'total time. Each tool’s startup cost — its fastest instance — is subtracted from '
+    + 'every measurement' + (state.includePrepare ? ', prepare time included.' : '.');
+}
+
+// --- tables ---------------------------------------------------------------
+
+function renderSummary(series) {
+  const host = el('summary');
+  if (!series.length) { host.innerHTML = '<p class="empty">Nothing measured yet.</p>'; return; }
+  const rows = series.map((s) => `<tr>
+      <td><span class="swatch" style="background:${s.color}"></span>${esc(s.tool)}</td>
+      <td class="num">${s.points.length}</td>
+      <td class="num">${fmtTime(s.total)}</td>
+      <td class="num">${fmtTime(s.base.run)}</td>
+      <td class="num">${fmtTime(s.base.prepare)}</td>
+    </tr>`).join('');
+  host.innerHTML = `<table><thead><tr>
+      <th>Tool</th><th class="num">Finished</th><th class="num">Cumulative time (s)</th>
+      <th class="num">Startup (run, s)</th><th class="num">Startup (prepare, s)</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderDetails() {
+  const host = el('details');
+  const base = baselines(state.data.measurements);
+  const rows = state.data.measurements.filter(matches);
+  if (!rows.length) { host.innerHTML = '<p class="empty">No instances match this selection.</p>'; return; }
+  rows.sort((a, b) => a.benchmark.localeCompare(b.benchmark)
+    || a.instance.localeCompare(b.instance) || a.tool.localeCompare(b.tool));
+  const body = rows.map((r) => `<tr>
+      <td>${esc(r.tool)}</td>
+      <td>${esc(r.benchmark)}</td>
+      <td>${esc(r.instance)}</td>
+      <td class="verdict-${esc(r.result || 'unknown')}">${esc(r.result)}</td>
+      <td class="num">${fmtTime(r.prepare_time)}</td>
+      <td class="num">${fmtTime(r.time)}</td>
+      <td class="num">${r.result === FINISHED ? fmtTime(cost(r, base.get(r.tool))) : ''}</td>
+    </tr>`).join('');
+  host.innerHTML = `<table><thead><tr>
+      <th>Tool</th><th>Benchmark</th><th>Instance</th><th>Result</th>
+      <th class="num">Prepare (s)</th><th class="num">Run (s)</th><th class="num">Adjusted (s)</th>
+    </tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// --- wiring ---------------------------------------------------------------
+
+function draw() {
+  const series = buildSeries();
+  renderPlot(series);
+  renderSummary(series);
+  renderDetails();
+}
+
+function fillSelectors() {
+  for (const facet of state.data.facets) {
+    const select = el(`facet-${facet.key}`);
+    if (!select) continue;
+    // "all" is always offered; the rest is whatever the loaded catalog contains.
+    select.innerHTML = ['all', ...facet.options]
+      .map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    select.addEventListener('change', () => { state.filters[facet.key] = select.value; draw(); });
+  }
+  el('include-prepare').addEventListener('change', (e) => {
+    state.includePrepare = e.target.checked;
+    draw();
+  });
+}
+
+async function boot() {
+  await bootChrome();
+  if (document.body.dataset.authenticated !== '1') {
+    el('plot').innerHTML = '<p class="empty">Log in to view results — <a href="/login">log in</a>.</p>';
+    return;
+  }
+  const res = await fetch('/api/cora/results/data/', { credentials: 'same-origin' });
+  if (!res.ok) {
+    el('plot').innerHTML = '<p class="empty">Could not load results.</p>';
+    return;
+  }
+  state.data = await res.json();
+  for (const facet of state.data.facets) state.filters[facet.key] = 'all';
+  fillSelectors();
+  draw();
+}
+
+boot();
+</script>
+{% endverbatim %}
+</body>
+</html>
