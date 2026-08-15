@@ -15,10 +15,10 @@ BENCHMARK_REPO = "https://github.com/CORA-COMP/benchmarks"
 _RESULTS_FILE = """result,time_generate,time_operation
 finished,0.30,0.60"""
 
-_INSTANCES_CSV = """benchmark;instance;repetition;device;params
-interval;generateRandom-1d-cpu;100;cpu;{"dim": 1, "device": "cpu"}
-zonotope;matMul-500d-gpu;100;gpu;{"dim": 500, "device": "gpu"}
-zonotope-batched;minkSum-1000d-b10-cpu;100;cpu;{"dim": 1000, "device": "cpu", "batch_size": 10}"""
+_INSTANCES_CSV = """benchmark;instance;repetition;params
+interval;generateRandom-1d-cpu;100;{"operation": "generateRandom", "dim": 1, "device": "cpu"}
+zonotope;matMul-500d-gpu;100;{"operation": "matMul", "dim": 500, "device": "gpu"}
+zonotope-batched;minkSum-1000d-b10-cpu;100;{"operation": "minkSum", "dim": 1000, "device": "cpu", "batch_size": 10}"""
 
 
 def toolkit_guide() -> Guide:
@@ -61,8 +61,8 @@ def toolkit_guide() -> Guide:
                 "details": [
                     "One step per selected benchmark, so a benchmark that fails does not take the "
                     "others with it. For each instance the worker runs `prepare_instance.sh v1 "
-                    "<benchmark> <instance> <repetition> <device> <params>` and then "
-                    "`run_instance.sh v1 <benchmark> <instance> <repetition> <device> <params> "
+                    "<benchmark> <instance> <repetition> <params>` and then "
+                    "`run_instance.sh v1 <benchmark> <instance> <repetition> <params> "
                     "<result-file>` — every column of the instance's `instances.csv` row, in file "
                     "order, with the results file appended.",
                     "The harness owns timing: it measures wall-clock time and enforces the "
@@ -96,10 +96,10 @@ def toolkit_guide() -> Guide:
                         "`install_tool.sh` — installs the tool, once per worker. Called as "
                         "`install_tool.sh v1`; the argument is the interface version.",
                         "`prepare_instance.sh` — called before each instance as `prepare_instance.sh "
-                        "v1 <benchmark> <instance> <repetition> <device> <params>`. A nonzero exit "
+                        "v1 <benchmark> <instance> <repetition> <params>`. A nonzero exit "
                         "skips the instance.",
                         "`run_instance.sh` — runs one instance as `run_instance.sh v1 <benchmark> "
-                        "<instance> <repetition> <device> <params> <result-file>` (`<result-file>` "
+                        "<instance> <repetition> <params> <result-file>` (`<result-file>` "
                         "is always the last argument) and writes its verdict to `<result-file>`.",
                     ]},
                     {"type": "note", "text":
@@ -111,7 +111,8 @@ def toolkit_guide() -> Guide:
                         "The arguments are the interface version followed by the instance's "
                         "`instances.csv` columns, in file order — so a column added to the catalog "
                         "arrives as a further argument, before `<result-file>`. `<params>` is a JSON "
-                        "object; `<repetition>` is how often to repeat the operation within the run."},
+                        "object carrying the operation, dimension and device; `<repetition>` is "
+                        "how often to repeat the operation within the run."},
                 ],
             },
             {
@@ -199,11 +200,13 @@ def benchmark_guide() -> Guide:
                         "`instance` — the case within that benchmark.",
                         "`repetition` — how often the tool repeats the operation inside the "
                         "instance, so one measurement averages over repeats.",
-                        "`device` — `cpu` or `gpu`; also part of the instance name and of "
-                        "`params`. A library without GPU support reports `unsupported` for the gpu "
-                        "instances rather than falling back to the CPU.",
-                        "`params` — a JSON object with the operation's arguments. On a batched "
-                        "benchmark it carries `batch_size`; its absence means unbatched.",
+                        "`params` — a JSON object with everything the operation needs: "
+                        "`operation`, `dim`, `device`, and `batch_size` on a batched benchmark "
+                        "(its absence is what means unbatched). Dispatch on these rather than on "
+                        "the instance name, which repeats the same facts in readable form.",
+                        "`device` inside `params` is `cpu` or `gpu`. A library without GPU support "
+                        "reports `unsupported` for the gpu instances rather than falling back to "
+                        "the CPU.",
                         "`timeout` (optional column) — a per-instance wall-clock cap in seconds, "
                         "enforced by the harness. Omit the column to leave instances uncapped.",
                         "Every column is passed, in file order, to the tool's "
