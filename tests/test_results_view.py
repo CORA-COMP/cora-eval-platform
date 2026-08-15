@@ -149,6 +149,31 @@ def test_a_tool_that_has_not_produced_a_result_yet_is_still_listed():
     assert payload["running"] == ["CORA.py"]
 
 
+def test_a_running_benchmark_is_measured_from_its_partial_csv():
+    """Result rows land only when a benchmark finishes, so the page reads the active
+    step's tailed results.csv — and prefers it over what the last run stored."""
+    from comp_eval_platform.core.models import (
+        Benchmark, Outcome, StepStatus, TaskStep,
+    )
+    from cora_comp.plots import measurements
+
+    _, _, _, task = _fixture()
+    task.outcome = Outcome.RUNNING
+    task.save(update_fields=["outcome"])
+    benchmark = Benchmark.objects.get(name="zonotope")
+    TaskStep.objects.create(
+        task=task, kind="run_benchmark", status=StepStatus.ACTIVE,
+        payload={"benchmark_id": benchmark.id, "results_csv":
+                 "benchmark,instance,prepare_time,result,time\n"
+                 "zonotope,matMul-5d-cpu,0.04,finished,0.09\n"},
+    )
+    rows = {(r["benchmark"], r["instance"]): r for r in measurements()}
+    assert rows[("zonotope", "matMul-5d-cpu")]["time"] == 0.09
+    assert rows[("zonotope", "matMul-5d-cpu")]["prepare_time"] == 0.04
+    # Instances the run has not reached yet keep whatever was stored before.
+    assert rows[("zonotope", "minkSum-5d-cpu")]["time"] == 0.20
+
+
 def test_the_data_endpoint_needs_a_logged_in_user(client):
     _fixture()
     assert client.get("/api/cora/results/data/").status_code == 403

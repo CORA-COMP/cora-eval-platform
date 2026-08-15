@@ -117,16 +117,64 @@ def measurements() -> list:
             continue  # a benchmark-level aggregate row, not a measurement
         spec = r.instance.spec if r.instance else {}
         # Later rows overwrite earlier ones: the queryset is ordered oldest first.
-        latest[(r.tool.name, r.benchmark.name, instance_name)] = {
-            "tool": r.tool.name,
-            "benchmark": r.benchmark.name,
-            "instance": instance_name,
-            "result": (r.result or "").strip().lower(),
-            "time": _float_or_none(r.time),
-            "prepare_time": _float_or_none((r.extra or {}).get(PREPARE_TIME_KEY)),
-            "facets": facet_values(r.benchmark.name, instance_name, spec),
-        }
+        latest[(r.tool.name, r.benchmark.name, instance_name)] = _row(
+            r.tool.name, r.benchmark.name, instance_name, spec,
+            r.result, r.time, (r.extra or {}).get(PREPARE_TIME_KEY))
+    # The newest measurements of all: the benchmark being run right now.
+    latest.update(in_flight_measurements())
     return list(latest.values())
+
+
+def _row(tool, benchmark, instance, spec, verdict, time, prepare_time) -> dict:
+    return {
+        "tool": tool,
+        "benchmark": benchmark,
+        "instance": instance,
+        "result": (verdict or "").strip().lower(),
+        "time": _float_or_none(time),
+        "prepare_time": _float_or_none(prepare_time),
+        "facets": facet_values(benchmark, instance, spec),
+    }
+
+
+def in_flight_measurements() -> dict:
+    """The instances of a benchmark that is still running, keyed like ``measurements()``.
+
+    A run's ``Result`` rows are written only once the whole benchmark is done, so without
+    these the page would stand still for a benchmark at a time. The active step tails the
+    node's partial results.csv into its payload every scheduler tick; parsing it here costs
+    no node access and stores nothing — the real rows land when the step finishes.
+    """
+    from comp_eval_platform.core.models import Instance, StepStatus, TaskStep
+    from comp_eval_platform.core.models.execution import TERMINAL_OUTCOMES
+
+    from . import kinds
+    from .results import parse_text
+
+    steps = (TaskStep.objects
+             .filter(kind=kinds.RUN_BENCHMARK, status=StepStatus.ACTIVE,
+                     task__tool__isnull=False)
+             .exclude(task__outcome__in=TERMINAL_OUTCOMES)
+             .select_related("task", "task__tool"))
+    rows = OrderedDict()
+    for step in steps:
+        payload = step.payload or {}
+        csv_text = payload.get("results_csv")
+        if not csv_text:
+            continue
+        instances = {i.name: i for i in
+                     Instance.objects.filter(benchmark_id=payload.get("benchmark_id"))
+                     .select_related("benchmark")}
+        tool_name = step.task.tool.name
+        for record in parse_text(csv_text):
+            instance = instances.get(record.instance)
+            if instance is None:
+                continue
+            benchmark_name = instance.benchmark.name
+            rows[(tool_name, benchmark_name, record.instance)] = _row(
+                tool_name, benchmark_name, record.instance, instance.spec,
+                record.result, record.time, (record.extra or {}).get(PREPARE_TIME_KEY))
+    return rows
 
 
 def running_tools() -> list:

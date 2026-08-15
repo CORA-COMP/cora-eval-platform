@@ -620,10 +620,10 @@ function buildDetailFilters() {
       <select id="detail-tool"></select></div>
     <div><label for="detail-benchmark">Benchmark</label>
       <select id="detail-benchmark"></select></div>
-    <div><label for="detail-result">Result</label>
-      <select id="detail-result"></select></div>
     <div><label for="detail-instance">Instance contains</label>
       <input id="detail-instance" type="search" placeholder="e.g. matMul-500d"></div>
+    <div><label for="detail-result">Result</label>
+      <select id="detail-result"></select></div>
     <div><label for="detail-page-size">Rows per page</label>
       <select id="detail-page-size">${PAGE_SIZES.map(option).join('')}</select></div>`;
   el('detail-page-size').value = String(state.details.pageSize);
@@ -637,8 +637,8 @@ function buildDetailFilters() {
   });
   onChange('detail-tool', 'tool');
   onChange('detail-benchmark', 'benchmark');
-  onChange('detail-result', 'result');
   onChange('detail-instance', 'instance');
+  onChange('detail-result', 'result');
   onChange('detail-page-size', 'pageSize', Number);
 }
 

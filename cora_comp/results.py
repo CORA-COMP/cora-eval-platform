@@ -45,6 +45,12 @@ def parse_results(artifacts_dir: str) -> list:
         return [_record(row) for row in csv.DictReader(fh)]
 
 
+def parse_text(csv_text: str) -> list:
+    """The same, from the file's text — what a run still in progress has, since the step
+    tails the node's results.csv into its payload rather than fetching it."""
+    return [_record(row) for row in csv.DictReader((csv_text or "").splitlines())]
+
+
 def _record(row: dict) -> ResultRecord:
     extra = {k: _number(v) for k, v in row.items()
              if k is not None and k not in _KNOWN_COLUMNS}
