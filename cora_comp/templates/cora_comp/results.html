@@ -579,25 +579,35 @@ function renderPager(total, from, shown, pages) {
   if (el('page-next')) el('page-next').addEventListener('click', () => step(1));
 }
 
+/** "all" plus a facet's own values, under the catalog's groups where the facet has them. */
+function optionsMarkup(facet) {
+  const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
+  const body = facet.groups
+    ? facet.groups.map((g) =>
+        `<optgroup label="${esc(g.label)}">${g.options.map(option).join('')}</optgroup>`).join('')
+    : facet.options.map(option).join('');
+  return option('all') + body;
+}
+
 /** Replace a selector's options, keeping the selection where it still exists. */
-function setOptions(select, values, selected) {
-  const markup = ['all', ...values]
-    .map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+function setOptions(select, facet, selected) {
+  const markup = optionsMarkup(facet);
   if (select.innerHTML === markup) return selected;  // untouched, so an open dropdown stays open
   select.innerHTML = markup;
-  select.value = values.includes(selected) ? selected : 'all';
+  select.value = facet.options.includes(selected) ? selected : 'all';
   return select.value;
 }
 
 /** The options come from the data, so a run that adds a tool, a benchmark or a verdict
- *  shows up in the filters without a code change — and without touching the text box. */
+ *  shows up in the filters without a code change — and without touching the text box. The
+ *  benchmark selector carries the catalog's groups, the same as the one above the plot. */
 function syncDetailFilters() {
-  const facet = state.data.facets.find((f) => f.key === 'benchmark');
+  const benchmarks = state.data.facets.find((f) => f.key === 'benchmark') || { options: [] };
   const verdicts = [...new Set(state.data.measurements.map((r) => r.result).filter(Boolean))].sort();
-  state.details.tool = setOptions(el('detail-tool'), state.data.tools, state.details.tool);
-  state.details.benchmark = setOptions(el('detail-benchmark'),
-    facet ? facet.options : [], state.details.benchmark);
-  state.details.result = setOptions(el('detail-result'), verdicts, state.details.result);
+  const d = state.details;
+  d.tool = setOptions(el('detail-tool'), { options: state.data.tools }, d.tool);
+  d.benchmark = setOptions(el('detail-benchmark'), benchmarks, d.benchmark);
+  d.result = setOptions(el('detail-result'), { options: verdicts }, d.result);
 }
 
 /** The detail filters, built once: one per column of the table that is not a time. They
@@ -642,22 +652,13 @@ function draw() {
 }
 
 /** A selector per facet the payload carries, so a facet added server-side needs no markup
- *  here. "all" is always offered — on the device facet that is what plots cpu and gpu
- *  together; the rest is whatever the loaded catalog contains, under the catalog's own
- *  groups where the facet has them. Rebuilt only when the options themselves change, so a
- *  poll leaves the selection alone. */
+ *  here. Selecting "all" on the device facet is what plots cpu and gpu together. Rebuilt
+ *  only when the options themselves change, so a poll leaves the selection alone. */
 function syncFacetSelectors() {
-  const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
-  const markup = state.data.facets.map((facet) => {
-    const body = facet.groups
-      ? facet.groups.map((g) =>
-          `<optgroup label="${esc(g.label)}">${g.options.map(option).join('')}</optgroup>`).join('')
-      : facet.options.map(option).join('');
-    return `<div class="control">
+  const markup = state.data.facets.map((facet) => `<div class="control">
         <label for="facet-${esc(facet.key)}">${esc(facet.label)}</label>
-        <select id="facet-${esc(facet.key)}">${option('all')}${body}</select>
-      </div>`;
-  }).join('');
+        <select id="facet-${esc(facet.key)}">${optionsMarkup(facet)}</select>
+      </div>`).join('');
   const host = el('facets');
   if (host.innerHTML === markup) return;
   host.innerHTML = markup;
