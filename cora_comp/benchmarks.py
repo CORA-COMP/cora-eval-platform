@@ -77,7 +77,7 @@ def load_benchmarks_from_csv(*, repository, ref, owner, csv_text):
     time)."""
     from comp_eval_platform.core.models import Benchmark, Instance
 
-    from .category import ensure_category
+    from .category import ensure_category, group_for
 
     category = ensure_category()
     header, rows = parse_instances_csv(csv_text)
@@ -88,7 +88,10 @@ def load_benchmarks_from_csv(*, repository, ref, owner, csv_text):
             category=category, name=name,
             defaults={
                 "owner": owner, "repository": repository, "hash": ref,
-                "published": True, "extra": {"columns": header},
+                "published": True,
+                # `group` is the display axis within the category; the CSV alone
+                # decides it, via the benchmark's name (see category.py).
+                "extra": {"columns": header, "group": group_for(name)},
             },
         )
         benchmark.instances.all().delete()

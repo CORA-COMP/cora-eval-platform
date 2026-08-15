@@ -57,6 +57,19 @@ def test_facet_options_come_from_the_loaded_catalog():
     assert options["operation"] == ["convHull", "matMul", "minkSum", "startup"]
 
 
+def test_benchmark_selector_is_grouped():
+    """The benchmark selector shows the catalog's own split, in display order, and
+    skips groups nothing was loaded into."""
+    from cora_comp.plots import facet_options
+
+    _fixture()
+    facet = next(f for f in facet_options() if f["key"] == "benchmark")
+    assert facet["groups"] == [
+        {"label": "test", "options": ["test"]},
+        {"label": "sets", "options": ["interval", "zonotope"]},
+    ]
+
+
 def test_measurements_carry_the_verdict_times_and_facets():
     from cora_comp.plots import measurements
 

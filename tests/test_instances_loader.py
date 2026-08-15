@@ -70,6 +70,20 @@ def test_parse_rejects_ragged_rows():
         parse_instances_csv("benchmark;instance\nzonotope;x;extra\n")
 
 
+def test_load_assigns_the_display_group():
+    """The group is derived from the benchmark's name, so the catalog alone decides it."""
+    from cora_comp.benchmarks import load_benchmarks_from_csv
+
+    csv_text = BENCHMARKS_CSV + 'zonotope-batched;minkSum-1d-b8;100;{"dim": 1}\ntest;startup-1d;1;{}\n'
+    benchmarks = load_benchmarks_from_csv(
+        repository="https://x/r", ref="abc123", owner=_user(), csv_text=csv_text,
+    )
+    assert {b.name: b.extra["group"] for b in benchmarks} == {
+        "interval": "sets", "zonotope": "sets",
+        "zonotope-batched": "sets-batched", "test": "test",
+    }
+
+
 def test_load_creates_benchmarks_and_ordered_instances():
     from comp_eval_platform.core.models import Instance
 

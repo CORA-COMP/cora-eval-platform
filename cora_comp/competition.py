@@ -48,6 +48,12 @@ class CoraCompetition(Competition):
 
         ensure_category()
 
+    def benchmark_groups(self) -> list:
+        """The groups the catalog is shown in, in display order (see category.py)."""
+        from .category import GROUPS
+
+        return list(GROUPS)
+
     def load_benchmarks(self, *, category_name, repository, ref, owner) -> list:
         """Fan the central ``instances.csv`` (at ``repository@ref``) into one Benchmark
         per distinct benchmark, each owning its instances. ``category_name`` is accepted
@@ -65,6 +71,8 @@ class CoraCompetition(Competition):
     def build_steps(self, task) -> list:
         from comp_eval_platform.core.models import Benchmark, TaskStep
 
+        from .category import group_order
+
         order = 0
 
         def add(kind, *, run_as_root=True, **payload):
@@ -77,7 +85,9 @@ class CoraCompetition(Competition):
 
         steps = []
         if task.tool is not None:
-            steps += [add(kinds.CREATE), add("assign"), add(kinds.INSTALL)]
+            # Install as the user that runs the instances: whatever install leaves in
+            # $HOME (MATLAB's preferences folder) has to stay writable at run time.
+            steps += [add(kinds.CREATE), add("assign"), add(kinds.INSTALL, run_as_root=False)]
             benchmarks = Benchmark.objects.filter(
                 category=task.tool.category, published=True,
             )
@@ -86,7 +96,9 @@ class CoraCompetition(Competition):
             selected = task.tool.extra.get("benchmarks")
             if selected:
                 benchmarks = benchmarks.filter(id__in=selected)
-            for b in benchmarks.order_by("name"):
+            # Run group by group (test, then sets, then their batched twins), so the
+            # pipeline reads in the same order the catalog is shown in.
+            for b in sorted(benchmarks, key=lambda b: (group_order(b.name), b.name)):
                 steps.append(add(kinds.RUN_BENCHMARK, benchmark_id=str(b.id)))
             steps.append(add(SHUTDOWN_KIND))
         else:

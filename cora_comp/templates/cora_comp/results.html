@@ -489,9 +489,14 @@ function fillSelectors() {
   for (const facet of state.data.facets) {
     const select = el(`facet-${facet.key}`);
     if (!select) continue;
-    // "all" is always offered; the rest is whatever the loaded catalog contains.
-    select.innerHTML = ['all', ...facet.options]
-      .map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    // "all" is always offered; the rest is whatever the loaded catalog contains,
+    // under the catalog's own groups where the facet has them.
+    const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
+    const body = facet.groups
+      ? facet.groups.map((g) =>
+          `<optgroup label="${esc(g.label)}">${g.options.map(option).join('')}</optgroup>`).join('')
+      : facet.options.map(option).join('');
+    select.innerHTML = option('all') + body;
     select.addEventListener('change', () => { state.filters[facet.key] = select.value; draw(); });
   }
   el('include-prepare').addEventListener('change', (e) => {

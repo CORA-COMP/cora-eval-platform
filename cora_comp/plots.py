@@ -55,7 +55,11 @@ def _float_or_none(value):
 
 def facet_options() -> list:
     """The selector options, taken from the loaded catalog: every value that occurs in
-    any instance of any benchmark, sorted. The view prepends "all"."""
+    any instance of any benchmark, sorted. The view prepends "all".
+
+    The benchmark facet also carries ``groups``, so the selector shows the catalog's
+    own split (test / sets / their batched twins) rather than one flat list.
+    """
     from comp_eval_platform.core.models import Instance
 
     seen = {facet["key"]: set() for facet in FACETS}
@@ -66,7 +70,23 @@ def facet_options() -> list:
         for key, value in facet_values(benchmark_name, instance_name, spec).items():
             if value:
                 seen[key].add(value)
-    return [{**facet, "options": sorted(seen[facet["key"]])} for facet in FACETS]
+    options = [{**facet, "options": sorted(seen[facet["key"]])} for facet in FACETS]
+    for facet in options:
+        if facet["key"] == "benchmark":
+            facet["groups"] = _benchmark_groups(facet["options"])
+    return options
+
+
+def _benchmark_groups(names) -> list:
+    """``[{"label", "options"}]`` over the given benchmark names, in group order,
+    skipping groups the catalog has nothing in."""
+    from .category import GROUPS, group_for
+
+    grouped = [
+        {"label": label, "options": [n for n in names if group_for(n) == label]}
+        for label in GROUPS
+    ]
+    return [g for g in grouped if g["options"]]
 
 
 def measurements() -> list:
