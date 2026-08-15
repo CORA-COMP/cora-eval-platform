@@ -18,7 +18,7 @@ finished,0.30,0.60"""
 _INSTANCES_CSV = """benchmark;instance;repetition;device;params
 interval;generateRandom-1d-cpu;100;cpu;{"dim": 1, "device": "cpu"}
 zonotope;matMul-500d-gpu;100;gpu;{"dim": 500, "device": "gpu"}
-zonotope;minkSum-1000d-cpu;100;cpu;{"dim": 1000, "device": "cpu"}"""
+zonotope-batched;minkSum-1000d-b10-cpu;100;cpu;{"dim": 1000, "device": "cpu", "batch_size": 10}"""
 
 
 def toolkit_guide() -> Guide:
@@ -188,14 +188,17 @@ def benchmark_guide() -> Guide:
                         "`instance` as the first two columns:"},
                     {"type": "code", "code": _INSTANCES_CSV},
                     {"type": "bullets", "items": [
-                        "`benchmark` — groups instances into a benchmark, the unit a tool selects.",
+                        "`benchmark` — groups instances into a benchmark, the unit a tool selects. "
+                        "Each set representation gives a plain and a `-batched` benchmark, so a "
+                        "library without a vectorized path can enter one without the other.",
                         "`instance` — the case within that benchmark.",
                         "`repetition` — how often the tool repeats the operation inside the "
                         "instance, so one measurement averages over repeats.",
                         "`device` — `cpu` or `gpu`; also part of the instance name and of "
                         "`params`. A library without GPU support reports `unsupported` for the gpu "
                         "instances rather than falling back to the CPU.",
-                        "`params` — a JSON object with the operation's arguments.",
+                        "`params` — a JSON object with the operation's arguments. On a batched "
+                        "benchmark it carries `batch_size`; its absence means unbatched.",
                         "`timeout` (optional column) — a per-instance wall-clock cap in seconds, "
                         "enforced by the harness. Omit the column to leave instances uncapped.",
                         "Every column is passed, in file order, to the tool's "
