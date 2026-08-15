@@ -12,13 +12,13 @@ BENCHMARK_REPO = "https://github.com/CORA-COMP/benchmarks"
 
 # A tool's results file for one instance: the verdict, plus any numbers it wants to
 # report alongside it.
-_RESULTS_FILE = """result,time_reachable,time_verification
-verified,0.30,0.60"""
+_RESULTS_FILE = """result,time_generate,time_operation
+finished,0.30,0.60"""
 
-_INSTANCES_CSV = """benchmark;instance;repetition;params
-interval;generateRandom-1d;100;{"dim": 1}
-zonotope;matMul-500d;100;{"dim": 500}
-zonotope;minkSum-1000d;100;{"dim": 1000}"""
+_INSTANCES_CSV = """benchmark;instance;repetition;device;params
+interval;generateRandom-1d-cpu;100;cpu;{"dim": 1, "device": "cpu"}
+zonotope;matMul-500d-gpu;100;gpu;{"dim": 500, "device": "gpu"}
+zonotope;minkSum-1000d-cpu;100;cpu;{"dim": 1000, "device": "cpu"}"""
 
 
 def toolkit_guide() -> Guide:
@@ -61,10 +61,10 @@ def toolkit_guide() -> Guide:
                 "details": [
                     "One step per selected benchmark, so a benchmark that fails does not take the "
                     "others with it. For each instance the worker runs `prepare_instance.sh v1 "
-                    "<benchmark> <instance> <repetition> <params>` and then `run_instance.sh v1 "
-                    "<benchmark> <instance> <repetition> <params> <result-file>` — every column of "
-                    "the instance's `instances.csv` row, in file order, with the results file "
-                    "appended.",
+                    "<benchmark> <instance> <repetition> <device> <params>` and then "
+                    "`run_instance.sh v1 <benchmark> <instance> <repetition> <device> <params> "
+                    "<result-file>` — every column of the instance's `instances.csv` row, in file "
+                    "order, with the results file appended.",
                     "The harness owns timing: it measures wall-clock time and enforces the "
                     "per-instance timeout (the `timeout` column in `instances.csv`, if the "
                     "benchmark set defines one; otherwise the run is uncapped). A nonzero exit from "
@@ -90,17 +90,17 @@ def toolkit_guide() -> Guide:
                         f"The [tool skeleton repository]({TOOL_SKELETON}) is the minimal layout the "
                         "submission system runs. Its scripts have their argument parsing in place "
                         "and `TODO`s where your logic goes, and they run end-to-end as-is (a 1 s "
-                        "stand-in run that writes a valid `unknown` result), so you can use it as a "
+                        "stand-in run that writes a valid `finished` result), so you can use it as a "
                         "test tool before filling it in."},
                     {"type": "bullets", "items": [
                         "`install_tool.sh` — installs the tool, once per worker. Called as "
                         "`install_tool.sh v1`; the argument is the interface version.",
                         "`prepare_instance.sh` — called before each instance as `prepare_instance.sh "
-                        "v1 <benchmark> <instance> <repetition> <params>`. A nonzero exit skips the "
-                        "instance.",
+                        "v1 <benchmark> <instance> <repetition> <device> <params>`. A nonzero exit "
+                        "skips the instance.",
                         "`run_instance.sh` — runs one instance as `run_instance.sh v1 <benchmark> "
-                        "<instance> <repetition> <params> <result-file>` (`<result-file>` is always "
-                        "the last argument) and writes its verdict to `<result-file>`.",
+                        "<instance> <repetition> <device> <params> <result-file>` (`<result-file>` "
+                        "is always the last argument) and writes its verdict to `<result-file>`.",
                     ]},
                     {"type": "note", "text":
                         "The arguments are the interface version followed by the instance's "
@@ -113,15 +113,23 @@ def toolkit_guide() -> Guide:
                 "heading": "Reporting Results",
                 "blocks": [
                     {"type": "text", "text":
-                        "`run_instance.sh` just writes its result into the result file it is handed "
-                        "(its last argument) — a `result` column whose value is `verified`, "
-                        "`falsified`, `unknown`, or `error`, as in the example below. Any further "
-                        "columns you write are kept per instance alongside the verdict, so a tool "
-                        "can report its own timing breakdown."},
+                        "`run_instance.sh` just writes its verdict into the result file it is "
+                        "handed (its last argument) — a `result` column holding one of three "
+                        "values, as in the example below. Any further columns you write are kept "
+                        "per instance alongside the verdict, so a library can report its own "
+                        "breakdown."},
+                    {"type": "bullets", "items": [
+                        "`finished` — the operation ran. This is what the scoreboard counts.",
+                        "`unsupported` — your library cannot run this instance (no GPU support, "
+                        "say). Report it rather than substituting something else, which would be "
+                        "recorded as a measurement of the instance you were given.",
+                        "`error` — the run failed.",
+                    ]},
                     {"type": "code", "code": _RESULTS_FILE},
                     {"type": "note", "text":
-                        "The `time` a run is scored on is the harness wall-clock, not a "
-                        "self-reported number — anything your tool reports rides along beside it."},
+                        "There is no verdict for timing: the harness measures the wall-clock time "
+                        "of `run_instance.sh` itself, and adds `timeout` or `prepare_failed` of its "
+                        "own accord. Anything your library reports rides along beside that."},
                 ],
             },
         ],
@@ -184,6 +192,9 @@ def benchmark_guide() -> Guide:
                         "`instance` — the case within that benchmark.",
                         "`repetition` — how often the tool repeats the operation inside the "
                         "instance, so one measurement averages over repeats.",
+                        "`device` — `cpu` or `gpu`; also part of the instance name and of "
+                        "`params`. A library without GPU support reports `unsupported` for the gpu "
+                        "instances rather than falling back to the CPU.",
                         "`params` — a JSON object with the operation's arguments.",
                         "`timeout` (optional column) — a per-instance wall-clock cap in seconds, "
                         "enforced by the harness. Omit the column to leave instances uncapped.",

@@ -161,19 +161,19 @@ def test_run_handler_parses_and_stores_results(monkeypatch):
     monkeypatch.setattr(StepHandler, "node_ip", property(lambda self: "1.2.3.4"))
     monkeypatch.setattr(shell, "node_exec", lambda ip, cmd, **k:
                         "benchmark,instance,time_verification,prepare_time,result,time\n"
-                        "ACC,acc_1,0.42,0.01,verified,0.85\n")
+                        "ACC,acc_1,0.42,0.01,finished,0.85\n")
 
     step.handler.on_marked_done()
 
     r = Result.objects.get(task=task, benchmark=b)
-    assert r.result == "verified" and r.time == 0.85
+    assert r.result == "finished" and r.time == 0.85
     assert r.instance.name == "acc_1"
     assert r.extra.get("time_verification") == 0.42  # tool's own breakdown kept as extra
 
     # A well-formed run freezes a green stats summary tallying the verdicts.
     step.refresh_from_db()
     assert step.payload["severity"] == "success"
-    assert step.payload["summary"]["verdicts"] == {"verified": 1, "falsified": 0, "unknown": 0}
+    assert step.payload["summary"]["verdicts"] == {"finished": 1, "unsupported": 0, "error": 0}
 
 
 def test_parse_results_keeps_harness_time_and_tool_extras(tmp_path):
@@ -185,10 +185,10 @@ def test_parse_results_keeps_harness_time_and_tool_extras(tmp_path):
     task = Task.objects.create(owner=tool.owner, tool=tool)
     (tmp_path / "results.csv").write_text(
         "benchmark,instance,time_reachable,time_verification,prepare_time,result,time\n"
-        "ACC,acc_1,0.3,0.6,0.05,verified,0.85\n"
+        "ACC,acc_1,0.3,0.6,0.05,finished,0.85\n"
     )
     (rec,) = get_competition().parse_results(task, str(tmp_path))
-    assert rec.instance == "acc_1" and rec.result == "verified"
+    assert rec.instance == "acc_1" and rec.result == "finished"
     assert rec.time == 0.85  # harness wall-clock, not a self-reported number
     assert rec.extra == {"time_reachable": 0.3, "time_verification": 0.6, "prepare_time": 0.05}
 
@@ -207,13 +207,15 @@ def test_summarize_buckets_verdicts():
 
     from cora_comp.summary import summarize
 
+    # The harness's own verdicts (timeout, prepare_failed) fall in with error, as does
+    # anything outside the tool's three-value vocabulary.
     recs = [ResultRecord(instance=n, result=r, time=None) for n, r in
-            [("a", "verified"), ("b", "falsified"), ("c", "unknown"),
-             ("d", "holds"), ("e", "error")]]  # holds→verified, error→unknown
+            [("a", "finished"), ("b", "unsupported"), ("c", "error"),
+             ("d", "finished"), ("e", "timeout"), ("f", "prepare_failed")]]
     out = summarize(recs)
     assert out["severity"] == "success"
-    assert out["summary"]["verdicts"] == {"verified": 2, "falsified": 1, "unknown": 2}
-    assert out["summary"]["order"] == ["verified", "falsified", "unknown"]
+    assert out["summary"]["verdicts"] == {"finished": 2, "unsupported": 1, "error": 3}
+    assert out["summary"]["order"] == ["finished", "unsupported", "error"]
     assert summarize([]) is None  # malformed/empty → no green summary
 
 
@@ -226,7 +228,8 @@ def test_score_ranks_tools_without_a_category_column():
     tool = Tool.objects.create(owner=u, category=cat, name="cora", base_image="cora")
     bench = Benchmark.objects.create(owner=u, category=cat, name="ACC", published=True)
     task = Task.objects.create(owner=u, tool=tool)
-    for result, t in [("verified", 1.0), ("unknown", 2.0), ("prepare_failed", 0.5)]:
+    # Only `finished` counts; the time of every instance still adds up.
+    for result, t in [("finished", 1.0), ("unsupported", 2.0), ("prepare_failed", 0.5)]:
         Result.objects.create(task=task, tool=tool, benchmark=bench, category=cat,
                               result=result, time=t)
 
@@ -234,8 +237,8 @@ def test_score_ranks_tools_without_a_category_column():
     track.benchmarks.add(bench)
 
     board = get_competition().score(track)
-    assert board.columns == ["tool", "solved", "time"]
-    assert board.rows == [{"tool": "cora", "solved": 1, "time": 3.5}]
+    assert board.columns == ["tool", "finished", "time"]
+    assert board.rows == [{"tool": "cora", "finished": 1, "time": 3.5}]
 
 
 def test_overview_labels_benchmark_task_by_category():

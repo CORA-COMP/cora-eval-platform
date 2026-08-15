@@ -37,27 +37,27 @@ def _run_benchmark(repo, name, tool, out, version="v1"):
         return list(csv.DictReader(fh))
 
 
-# A tool that self-reports a verdict plus its own timing breakdown to the results file
-# it is handed (the last argument).
-VERIFYING_TOOL = (
+# A tool that reports "finished" plus its own timing breakdown to the results file it is
+# handed (the last argument).
+REPORTING_TOOL = (
     "#!/bin/sh\n"
     'for a in "$@"; do last="$a"; done\n'
-    'printf "result,time_verification\\nverified,0.42\\n" > "$last"\n'
+    'printf "result,time_operation\\nfinished,0.42\\n" > "$last"\n'
 )
 
 
 def test_records_result_and_harness_wall_clock(tmp_path):
     repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\nACC;a2\nOTHER;x\n")
-    tool = _tool(tmp_path / "tool", VERIFYING_TOOL)
+    tool = _tool(tmp_path / "tool", REPORTING_TOOL)
     out = str(tmp_path / "results.csv")
 
     rows = _run_benchmark(repo, "ACC", tool, out)
 
     assert [r["instance"] for r in rows] == ["a1", "a2"]  # OTHER benchmark excluded
-    assert all(r["result"] == "verified" for r in rows)
+    assert all(r["result"] == "finished" for r in rows)
     # Harness owns `time` (wall-clock, >= 0); tool's breakdown rides along as a column.
     assert all(float(r["time"]) >= 0.0 for r in rows)
-    assert rows[0]["time_verification"] == "0.42"
+    assert rows[0]["time_operation"] == "0.42"
     assert "prepare_time" in rows[0]
 
 
@@ -67,7 +67,7 @@ ECHO_TOOL = (
     "#!/bin/sh\n"
     'for a in "$@"; do last="$a"; done\n'
     'printf "result,seen_version,seen_benchmark,seen_instance,seen_timeout\\n" > "$last"\n'
-    'printf "unknown,%s,%s,%s,%s\\n" "$1" "$2" "$3" "$4" >> "$last"\n'
+    'printf "finished,%s,%s,%s,%s\\n" "$1" "$2" "$3" "$4" >> "$last"\n'
 )
 
 
@@ -94,7 +94,7 @@ def test_json_params_column_reaches_the_tool_intact(tmp_path):
         "#!/bin/sh\n"
         'for a in "$@"; do last="$a"; done\n'
         'printf "%s" "$5" > seen_params.json\n'
-        'printf "result\\nverified\\n" > "$last"\n'
+        'printf "result\\nfinished\\n" > "$last"\n'
     )
     repo = _repo(tmp_path / "repo",
                  'benchmark;instance;repetition;params\n'
@@ -104,7 +104,7 @@ def test_json_params_column_reaches_the_tool_intact(tmp_path):
 
     (row,) = _run_benchmark(repo, "zonotope", tool, out)
 
-    assert row["result"] == "verified"
+    assert row["result"] == "finished"
     seen = (tmp_path / "tool" / "seen_params.json").read_text()
     assert json.loads(seen) == {"dim": 2, "seed": 7}
 
@@ -114,7 +114,7 @@ def test_optional_timeout_column_caps_the_run(tmp_path):
         "#!/bin/sh\n"
         'for a in "$@"; do last="$a"; done\n'
         'sleep 2\n'
-        'printf "result\\nverified\\n" > "$last"\n'
+        'printf "result\\nfinished\\n" > "$last"\n'
     )
     repo = _repo(tmp_path / "repo", "benchmark;instance;timeout\nACC;slow;0.5\n")
     tool = _tool(tmp_path / "tool", slow_tool)
@@ -127,15 +127,15 @@ def test_optional_timeout_column_caps_the_run(tmp_path):
 
 def test_no_timeout_column_runs_uncapped(tmp_path):
     repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\n")
-    tool = _tool(tmp_path / "tool", VERIFYING_TOOL)
+    tool = _tool(tmp_path / "tool", REPORTING_TOOL)
     out = str(tmp_path / "results.csv")
     (row,) = _run_benchmark(repo, "ACC", tool, out)
-    assert row["result"] == "verified"
+    assert row["result"] == "finished"
 
 
 def test_prepare_failure_is_recorded(tmp_path):
     repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\n")
-    tool = _tool(tmp_path / "tool", VERIFYING_TOOL, prepare_body="#!/bin/sh\nexit 1\n")
+    tool = _tool(tmp_path / "tool", REPORTING_TOOL, prepare_body="#!/bin/sh\nexit 1\n")
     out = str(tmp_path / "results.csv")
     (row,) = _run_benchmark(repo, "ACC", tool, out)
     assert row["result"] == "prepare_failed"
@@ -143,9 +143,9 @@ def test_prepare_failure_is_recorded(tmp_path):
 
 
 def test_missing_result_file_falls_back_to_a_verdict(tmp_path):
-    """A tool that writes nothing still yields a row: unknown on a clean exit, error otherwise."""
+    """A tool that reports no verdict is an error, whatever it exited with."""
     repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;ok\nACC;bad\n")
     tool = _tool(tmp_path / "tool", '#!/bin/sh\n[ "$3" = bad ] && exit 3\nexit 0\n')
     out = str(tmp_path / "results.csv")
     rows = _run_benchmark(repo, "ACC", tool, out)
-    assert [r["result"] for r in rows] == ["unknown", "error"]
+    assert [r["result"] for r in rows] == ["error", "error"]

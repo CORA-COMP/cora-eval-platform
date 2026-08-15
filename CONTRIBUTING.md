@@ -19,8 +19,8 @@ in core; this repo holds the CORA-specific seams, step handlers, and node script
   category argument. This is where the variant diverges from ARCH-COMP, which needs a
   per-category registry.
 - **The node harness owns timing** (`cora_comp/scripts/harness.py`). A tool self-reports
-  only its verdict; wall-clock time and the optional per-instance `timeout` are enforced by
-  the harness.
+  only its verdict (`finished` / `unsupported` / `error`); wall-clock time and the optional
+  per-instance `timeout` are enforced by the harness.
 
 ## The core submodule
 

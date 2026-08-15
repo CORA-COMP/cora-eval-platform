@@ -3,10 +3,11 @@
 
 The harness owns timing: for each instance it runs the tool's ``prepare_instance.sh``
 then ``run_instance.sh``, measuring wall-clock and enforcing the optional per-instance
-timeout. The tool self-reports only its *verdict* (and any numbers it wants to publish)
-by writing a small header+row CSV to the ``results_file`` path passed as the last
-argument to ``run_instance.sh``. The harness merges that with its measured time into
-one ``results.csv`` row:
+timeout. The tool self-reports only its *verdict* — ``finished``, ``unsupported``, or
+``error`` — plus any numbers it wants to publish, by writing a small header+row CSV to
+the ``results_file`` path passed as the last argument to ``run_instance.sh``. Two further
+verdicts are the harness's own: ``timeout`` and ``prepare_failed``. The harness merges the
+verdict with its measured time into one ``results.csv`` row:
 
     benchmark, instance, <tool-reported extra columns...>, prepare_time, result, time
 
@@ -157,7 +158,8 @@ def _timed_run(cmd, cwd, timeout, show_output=False):
 
 def _read_tool_result(path):
     """The tool's self-reported ``(result, extra)`` from its header+row CSV. ``extra``
-    preserves the tool's column order, minus ``result``. Missing/empty file → unknown."""
+    preserves the tool's column order, minus ``result``. Missing/empty file → no verdict,
+    which the caller turns into ``error``."""
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return "", {}
     with open(path, newline="") as fh:
@@ -196,7 +198,7 @@ def run_instance(tool_dir, version, values, timeout, show_output=False):
     try:
         cap = "no cap" if timeout is None else f"timeout {timeout:g}s"
         log_box_open(f"run run_instance.sh ({cap})")
-        run_elapsed, run_to, run_rc = _timed_run(
+        run_elapsed, run_to, _ = _timed_run(
             [os.path.join(tool_dir, "run_instance.sh"), version, *values, res_path],
             tool_dir, timeout, show_output,
         )
@@ -205,7 +207,9 @@ def run_instance(tool_dir, version, values, timeout, show_output=False):
         else:
             result, extra = _read_tool_result(res_path)
             if not result:
-                result = "unknown" if run_rc == 0 else "error"
+                # A tool that reports no verdict failed to run the instance, whatever it
+                # exited with; the exit code is in the log above.
+                result = "error"
         log_box_note(f"run_instance.sh -> {result} in {run_elapsed:.2f}s")
         log_box_close()
         return {"prepare_time": round(prep_elapsed, 4), "result": result,

@@ -18,8 +18,9 @@ from . import kinds
 from .guides import benchmark_guide, toolkit_guide
 from .results import parse_results
 
-#: Verdicts that do not count as solved when scoring a track.
-_UNSOLVED = {"unknown", "error", "timeout", "falsified", "prepare_failed"}
+#: The one verdict that counts when scoring a track. Everything else — ``unsupported``,
+#: ``error``, and the harness's own ``timeout``/``prepare_failed`` — did not run.
+FINISHED = "finished"
 
 
 class CoraCompetition(Competition):
@@ -113,23 +114,23 @@ class CoraCompetition(Competition):
 
     # (5) Scoring ----------------------------------------------------------
     def score(self, track) -> Scoreboard:
-        """Per tool: instances solved, and total time over the track's benchmarks. With
+        """Per tool: instances finished, and total time over the track's benchmarks. With
         one category there is no category column to break the ranking down by."""
         from collections import defaultdict
 
         from comp_eval_platform.core.models import Result
 
         benchmark_ids = track.benchmarks.values_list("id", flat=True)
-        agg = defaultdict(lambda: {"solved": 0, "time": 0.0})
+        agg = defaultdict(lambda: {"finished": 0, "time": 0.0})
         for r in Result.objects.filter(benchmark_id__in=benchmark_ids).select_related("tool"):
             row = agg[r.tool.name]
             row["tool"] = r.tool.name
-            if r.result and r.result.lower() not in _UNSOLVED:
-                row["solved"] += 1
+            if (r.result or "").strip().lower() == FINISHED:
+                row["finished"] += 1
             row["time"] += r.time or 0.0
         return Scoreboard(
-            columns=["tool", "solved", "time"],
-            rows=sorted(agg.values(), key=lambda x: (-x["solved"], x["time"])),
+            columns=["tool", "finished", "time"],
+            rows=sorted(agg.values(), key=lambda x: (-x["finished"], x["time"])),
         )
 
     # (6) Presentation / export -------------------------------------------
@@ -137,7 +138,7 @@ class CoraCompetition(Competition):
         return Presentation(
             result_columns=["instance", "result", "time"],
             submission_fields=[{"name": "base_image", "type": "text"}],
-            score_columns=["tool", "solved", "time"],
+            score_columns=["tool", "finished", "time"],
             branding=Branding(
                 # Gradient's leading color, so all primary accents match the navbar.
                 primary_color="#dc2626",
