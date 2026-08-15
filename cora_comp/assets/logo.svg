@@ -1,29 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- CORA-COMP wordmark: slate letters beside a reachable-set motif (zonotopes growing
-     along a trajectory) recolored to the navbar's red->blue gradient. The gradient uses
-     userSpaceOnUse so each set samples the ramp at its own position. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="120" viewBox="0 0 360 120"
+<!-- CORA-COMP mark: reachable sets growing along a trajectory, in the navbar's red->blue
+     gradient. The gradient uses userSpaceOnUse so each set samples the ramp at its own
+     position. Mark only — the landing page prints the name beside it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="110" viewBox="0 0 120 110"
      role="img" aria-label="CORA-COMP">
   <defs>
-    <linearGradient id="coraGrad" gradientUnits="userSpaceOnUse" x1="12" y1="96" x2="130" y2="24">
+    <linearGradient id="coraGrad" gradientUnits="userSpaceOnUse" x1="8" y1="94" x2="112" y2="16">
       <stop offset="0" stop-color="#dc2626"/>
       <stop offset="1" stop-color="#2563eb"/>
     </linearGradient>
   </defs>
 
   <!-- Trajectory the sets are propagated along. -->
-  <path d="M 16 88 Q 46 88 62 60 T 108 32" fill="none" stroke="url(#coraGrad)"
+  <path d="M 14 86 Q 46 86 63 57 T 108 28" fill="none" stroke="url(#coraGrad)"
         stroke-width="3" stroke-linecap="round" stroke-dasharray="1 7"/>
 
   <!-- Reachable sets: parallelotopes growing as uncertainty propagates. -->
-  <g fill="none" stroke="url(#coraGrad)" stroke-width="3" stroke-linejoin="round">
-    <path d="M 9 84.5 L 18.8 81 L 23 91.5 L 13.2 95 Z"/>
-    <path d="M 26 75 L 44 69 L 50 87 L 32 93 Z"/>
-    <path d="M 46 51.5 L 67.2 44 L 74 63.5 L 52.8 71 Z"/>
-    <path d="M 65 34.5 L 92.8 24.5 L 101 59.5 L 73.2 69.5 Z"/>
+  <g fill="none" stroke="url(#coraGrad)" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M 7 82.5 L 16.8 79 L 21 89.5 L 11.2 93 Z"/>
+    <path d="M 25 72.5 L 43 66.5 L 49 84.5 L 31 90.5 Z"/>
+    <path d="M 46 48 L 67.2 40.5 L 74 60 L 52.8 67.5 Z"/>
+    <path d="M 66 30 L 93.8 20 L 102 55 L 74.2 65 Z"/>
   </g>
-
-  <text x="130" y="76" textLength="220" lengthAdjust="spacingAndGlyphs" fill="#464648"
-        font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-        font-size="42" font-weight="700" letter-spacing="1">CORA-COMP</text>
 </svg>

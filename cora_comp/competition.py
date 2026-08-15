@@ -147,22 +147,19 @@ class CoraCompetition(Competition):
                 # Outlined buttons pick up the gradient's trailing blue.
                 accent_color="#2563eb",
                 hero_image="/api/competition/assets/logo.svg",
-                hero_max_width=360,  # wide 3:1 wordmark, sized for presence on the landing hero
-                favicon="/api/competition/assets/favicon.svg",
+                hero_max_width=200,  # near-square mark; a tighter cap than a wide wordmark needs
+                # The PNG rasterization of favicon.svg (its source), since browser tabs
+                # render a PNG favicon more reliably than an SVG one.
+                favicon="/api/competition/assets/favicon.png",
             ),
             landing=Landing(
-                tagline="CORA-COMP is a friendly competition for reachability analysis and "
-                        "formal verification of continuous and hybrid systems.",
+                tagline="CORA-COMP is a friendly competition to compare the performance of "
+                        "different libraries on continuous set representation.",
                 links=[
                     {"label": "CORA", "url": "https://tumcps.github.io/CORA/"},
                     {"label": "GitHub", "url": "https://github.com/CORA-COMP"},
                 ],
                 contacts=["tobias.ladner@tum.de"],
-                related={
-                    "text": "Interested in the wider hybrid-systems competition? Check out ARCH-COMP!",
-                    "label": "Visit ARCH-COMP",
-                    "url": "https://arch-comp.github.io/",
-                },
             ),
             guides={"toolkit": toolkit_guide(), "benchmark": benchmark_guide()},
         )

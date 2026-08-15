@@ -24,10 +24,10 @@ cd cora-eval-platform && docker compose up --build
 The **first account you sign up becomes the admin**; later signups start disabled until an
 admin enables them.
 
-To try a submission, start from the examples:
+To try a submission:
 
-- Benchmark: <https://github.com/CORA-COMP/example_benchmark>
-- Tool: <https://github.com/CORA-COMP/example_toolkit>
+- Benchmarks: <https://github.com/CORA-COMP/benchmarks> — the catalog, submitted as a whole
+- Tool: <https://github.com/CORA-COMP/example_toolkit> — a runnable skeleton to start from
 
 ## Contributing
 

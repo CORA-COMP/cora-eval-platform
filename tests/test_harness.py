@@ -47,7 +47,7 @@ VERIFYING_TOOL = (
 
 
 def test_records_result_and_harness_wall_clock(tmp_path):
-    repo = _repo(tmp_path / "repo", "benchmark,instance\nACC,a1\nACC,a2\nOTHER,x\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\nACC;a2\nOTHER;x\n")
     tool = _tool(tmp_path / "tool", VERIFYING_TOOL)
     out = str(tmp_path / "results.csv")
 
@@ -62,8 +62,7 @@ def test_records_result_and_harness_wall_clock(tmp_path):
 
 
 # A tool that echoes the arguments it received back into the results file, to check the
-# harness passes them as <version> <benchmark> <instance> ... <results_file> — with no
-# category argument, unlike ARCH.
+# harness passes them as <version> <benchmark> <instance> ... <results_file>.
 ECHO_TOOL = (
     "#!/bin/sh\n"
     'for a in "$@"; do last="$a"; done\n'
@@ -73,7 +72,7 @@ ECHO_TOOL = (
 
 
 def test_forwards_version_then_the_csv_columns(tmp_path):
-    repo = _repo(tmp_path / "repo", "benchmark,instance,timeout\nACC,a1,60\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance;timeout\nACC;a1;60\n")
     tool = _tool(tmp_path / "tool", ECHO_TOOL)
     out = str(tmp_path / "results.csv")
     (row,) = _run_benchmark(repo, "ACC", tool, out, version="v1")
@@ -83,6 +82,33 @@ def test_forwards_version_then_the_csv_columns(tmp_path):
     assert row["seen_timeout"] == "60"
 
 
+def test_json_params_column_reaches_the_tool_intact(tmp_path):
+    """instances.csv is semicolon-separated so the commas inside `params` don't split the
+    row; the JSON must arrive as one argument the tool can parse."""
+    import json
+
+    # Writes the params argument it was handed into a file of its own (the harness runs
+    # it with the tool dir as cwd), so the verdict CSV's commas can't be confused with
+    # the JSON's. Args are <version> <benchmark> <instance> <repetition> <params> <out>.
+    params_tool = (
+        "#!/bin/sh\n"
+        'for a in "$@"; do last="$a"; done\n'
+        'printf "%s" "$5" > seen_params.json\n'
+        'printf "result\\nverified\\n" > "$last"\n'
+    )
+    repo = _repo(tmp_path / "repo",
+                 'benchmark;instance;repetition;params\n'
+                 'zonotope;matMul-2d;100;{"dim": 2, "seed": 7}\n')
+    tool = _tool(tmp_path / "tool", params_tool)
+    out = str(tmp_path / "results.csv")
+
+    (row,) = _run_benchmark(repo, "zonotope", tool, out)
+
+    assert row["result"] == "verified"
+    seen = (tmp_path / "tool" / "seen_params.json").read_text()
+    assert json.loads(seen) == {"dim": 2, "seed": 7}
+
+
 def test_optional_timeout_column_caps_the_run(tmp_path):
     slow_tool = (
         "#!/bin/sh\n"
@@ -90,7 +116,7 @@ def test_optional_timeout_column_caps_the_run(tmp_path):
         'sleep 2\n'
         'printf "result\\nverified\\n" > "$last"\n'
     )
-    repo = _repo(tmp_path / "repo", "benchmark,instance,timeout\nACC,slow,0.5\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance;timeout\nACC;slow;0.5\n")
     tool = _tool(tmp_path / "tool", slow_tool)
     out = str(tmp_path / "results.csv")
 
@@ -100,7 +126,7 @@ def test_optional_timeout_column_caps_the_run(tmp_path):
 
 
 def test_no_timeout_column_runs_uncapped(tmp_path):
-    repo = _repo(tmp_path / "repo", "benchmark,instance\nACC,a1\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\n")
     tool = _tool(tmp_path / "tool", VERIFYING_TOOL)
     out = str(tmp_path / "results.csv")
     (row,) = _run_benchmark(repo, "ACC", tool, out)
@@ -108,7 +134,7 @@ def test_no_timeout_column_runs_uncapped(tmp_path):
 
 
 def test_prepare_failure_is_recorded(tmp_path):
-    repo = _repo(tmp_path / "repo", "benchmark,instance\nACC,a1\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\n")
     tool = _tool(tmp_path / "tool", VERIFYING_TOOL, prepare_body="#!/bin/sh\nexit 1\n")
     out = str(tmp_path / "results.csv")
     (row,) = _run_benchmark(repo, "ACC", tool, out)
@@ -118,7 +144,7 @@ def test_prepare_failure_is_recorded(tmp_path):
 
 def test_missing_result_file_falls_back_to_a_verdict(tmp_path):
     """A tool that writes nothing still yields a row: unknown on a clean exit, error otherwise."""
-    repo = _repo(tmp_path / "repo", "benchmark,instance\nACC,ok\nACC,bad\n")
+    repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;ok\nACC;bad\n")
     tool = _tool(tmp_path / "tool", '#!/bin/sh\n[ "$3" = bad ] && exit 3\nexit 0\n')
     out = str(tmp_path / "results.csv")
     rows = _run_benchmark(repo, "ACC", tool, out)

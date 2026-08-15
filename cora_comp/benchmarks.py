@@ -10,6 +10,9 @@ to ``prepare_instance.sh``/``run_instance.sh``. Since jsonb does not preserve di
 order, the ordered header lives once on ``Benchmark.extra["columns"]``; per-instance
 values are addressed by name in ``Instance.spec``. A ``timeout`` column, if present,
 caps that instance; absent, the instance runs uncapped.
+
+The file is semicolon-separated: a ``params`` column carries JSON, whose commas would
+otherwise force every such field to be quoted.
 """
 import csv
 import io
@@ -21,6 +24,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 INSTANCES_FILE = "instances.csv"
+DELIMITER = ";"
 BENCHMARK_COLUMN = "benchmark"
 INSTANCE_COLUMN = "instance"
 TIMEOUT_COLUMN = "timeout"
@@ -34,7 +38,7 @@ def parse_instances_csv(text: str):
     """Return ``(header, rows)`` for an ``instances.csv``, where ``rows`` is a list of
     ``{column: value}`` dicts. Requires the ``benchmark`` and ``instance`` columns and
     preserves column order in ``header``."""
-    reader = csv.reader(io.StringIO(text))
+    reader = csv.reader(io.StringIO(text), delimiter=DELIMITER)
     try:
         header = [h.strip() for h in next(reader)]
     except StopIteration:

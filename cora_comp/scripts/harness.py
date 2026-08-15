@@ -15,6 +15,10 @@ as columns. All instances.csv columns are passed, in file order, to
 ``prepare_instance.sh``/``run_instance.sh`` (tools ignore the ones they don't need); the
 competition has a single category, so nothing else precedes them but the interface
 version. A ``timeout`` column caps that instance; absent/blank/``inf`` = no cap.
+
+``instances.csv`` is semicolon-separated (its ``params`` column carries JSON, whose commas
+would otherwise force quoting); ``results.csv`` stays a plain comma CSV, as does the small
+file a tool writes its verdict to.
 """
 import csv
 import json
@@ -61,6 +65,9 @@ def log_box_note(msg):
 
 def log_box_close():
     print(f"└{_LOG_THIN}", file=sys.stderr, flush=True)
+
+#: instances.csv is semicolon-separated; results.csv (written below) is a comma CSV.
+INSTANCES_DELIMITER = ";"
 
 BENCHMARK_COLUMN = "benchmark"
 INSTANCE_COLUMN = "instance"
@@ -209,7 +216,7 @@ def run_instance(tool_dir, version, values, timeout, show_output=False):
 
 def _read_instances(path):
     with open(path, newline="") as fh:
-        reader = csv.reader(fh)
+        reader = csv.reader(fh, delimiter=INSTANCES_DELIMITER)
         header = [h.strip() for h in next(reader)]
         rows = [{col: val.strip() for col, val in zip(header, raw)}
                 for raw in reader if any(c.strip() for c in raw)]

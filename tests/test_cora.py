@@ -130,11 +130,13 @@ def test_load_handler_loads_benchmarks_from_node(monkeypatch):
 
     monkeypatch.setattr(cora_steps, "_node_ip", lambda t: "1.2.3.4")
     monkeypatch.setattr(shell, "node_exec",
-                        lambda ip, cmd, **k: "benchmark,instance\nACC,a1\n" if "cat " in cmd else "deadbeef")
+                        lambda ip, cmd, **k: ("benchmark;instance;repetition;params\n"
+                                              'zonotope;matMul-1d;100;{"dim": 1}\n')
+                        if "cat " in cmd else "deadbeef")
 
     step.handler.on_marked_done()
 
-    b = Benchmark.objects.get(name="ACC")
+    b = Benchmark.objects.get(name="zonotope")
     assert b.published and b.hash == "deadbeef"  # sha from the node, not the empty submitted hash
 
 
@@ -262,13 +264,14 @@ def test_guides_cover_both_submission_pages():
         assert all(s["title"] and s["details"] for s in g.pipeline)
 
 
-def test_guides_link_the_github_skeleton_repos():
-    """The guides point submitters at the example repos on GitHub, not at zip assets."""
+def test_guides_link_the_github_repos():
+    """The guides point submitters at the tool skeleton and the benchmark catalog on
+    GitHub, not at zip assets."""
     from comp_eval_platform.competitions import get_competition
 
     prose = repr(get_competition().presentation().guides)
     assert "https://github.com/CORA-COMP/example_toolkit" in prose
-    assert "https://github.com/CORA-COMP/example_benchmark" in prose
+    assert "https://github.com/CORA-COMP/benchmarks" in prose
 
 
 def test_branding_assets_resolve():
@@ -277,6 +280,8 @@ def test_branding_assets_resolve():
     from comp_eval_platform.competitions import get_competition
 
     comp = get_competition()
-    for name in ("logo.svg", "favicon.svg"):
+    branding = comp.presentation().branding
+    for url in (branding.hero_image, branding.favicon):
+        name = url.rsplit("/", 1)[-1]
         assert comp.asset_path(name), f"{name} missing from {comp.assets_dir()}"
     assert comp.asset_path("../secrets") is None  # no traversal out of the assets dir

@@ -8,17 +8,17 @@ on the detail page, under the same names.
 from comp_eval_platform.results import Guide
 
 TOOL_SKELETON = "https://github.com/CORA-COMP/example_toolkit"
-BENCHMARK_SKELETON = "https://github.com/CORA-COMP/example_benchmark"
+BENCHMARK_REPO = "https://github.com/CORA-COMP/benchmarks"
 
 # A tool's results file for one instance: the verdict, plus any numbers it wants to
 # report alongside it.
 _RESULTS_FILE = """result,time_reachable,time_verification
 verified,0.30,0.60"""
 
-_INSTANCES_CSV = """benchmark,instance,timeout
-TORA,reach,300
-TORA,remain,300
-VCAS,worst-19.5,300"""
+_INSTANCES_CSV = """benchmark;instance;repetition;params
+interval;generateRandom-1d;100;{"dim": 1}
+zonotope;matMul-500d;100;{"dim": 500}
+zonotope;minkSum-1000d;100;{"dim": 1000}"""
 
 
 def toolkit_guide() -> Guide:
@@ -61,9 +61,10 @@ def toolkit_guide() -> Guide:
                 "details": [
                     "One step per selected benchmark, so a benchmark that fails does not take the "
                     "others with it. For each instance the worker runs `prepare_instance.sh v1 "
-                    "<benchmark> <instance>` and then `run_instance.sh v1 <benchmark> <instance> "
-                    "<result-file>` — every column of the instance's `instances.csv` row, in file "
-                    "order, with the results file appended.",
+                    "<benchmark> <instance> <repetition> <params>` and then `run_instance.sh v1 "
+                    "<benchmark> <instance> <repetition> <params> <result-file>` — every column of "
+                    "the instance's `instances.csv` row, in file order, with the results file "
+                    "appended.",
                     "The harness owns timing: it measures wall-clock time and enforces the "
                     "per-instance timeout (the `timeout` column in `instances.csv`, if the "
                     "benchmark set defines one; otherwise the run is uncapped). A nonzero exit from "
@@ -95,16 +96,17 @@ def toolkit_guide() -> Guide:
                         "`install_tool.sh` — installs the tool, once per worker. Called as "
                         "`install_tool.sh v1`; the argument is the interface version.",
                         "`prepare_instance.sh` — called before each instance as `prepare_instance.sh "
-                        "v1 <benchmark> <instance>` (plus any further `instances.csv` columns, in "
-                        "order). A nonzero exit skips the instance.",
+                        "v1 <benchmark> <instance> <repetition> <params>`. A nonzero exit skips the "
+                        "instance.",
                         "`run_instance.sh` — runs one instance as `run_instance.sh v1 <benchmark> "
-                        "<instance> <result-file>` (further columns before `<result-file>`, which is "
-                        "always the last argument) and writes its verdict to `<result-file>`.",
+                        "<instance> <repetition> <params> <result-file>` (`<result-file>` is always "
+                        "the last argument) and writes its verdict to `<result-file>`.",
                     ]},
                     {"type": "note", "text":
-                        "There is a single category, so — unlike ARCH-COMP — no category name is "
-                        "passed to the scripts: the arguments are the interface version followed by "
-                        "the instance's `instances.csv` columns."},
+                        "The arguments are the interface version followed by the instance's "
+                        "`instances.csv` columns, in file order — so a column added to the catalog "
+                        "arrives as a further argument, before `<result-file>`. `<params>` is a JSON "
+                        "object; `<repetition>` is how often to repeat the operation within the run."},
                 ],
             },
             {
@@ -173,22 +175,26 @@ def benchmark_guide() -> Guide:
                 "heading": "What Your Repository Must Contain",
                 "blocks": [
                     {"type": "text", "text":
-                        f"The [benchmark skeleton repository]({BENCHMARK_SKELETON}) is the minimal "
-                        "layout the loader reads. At its core is `instances.csv`, one row per "
-                        "instance, with `benchmark` and `instance` as the first two columns:"},
+                        f"The [benchmarks repository]({BENCHMARK_REPO}) is what the loader reads. At "
+                        "its core is `instances.csv`, one row per instance, with `benchmark` and "
+                        "`instance` as the first two columns:"},
                     {"type": "code", "code": _INSTANCES_CSV},
                     {"type": "bullets", "items": [
                         "`benchmark` — groups instances into a benchmark, the unit a tool selects.",
                         "`instance` — the case within that benchmark.",
+                        "`repetition` — how often the tool repeats the operation inside the "
+                        "instance, so one measurement averages over repeats.",
+                        "`params` — a JSON object with the operation's arguments.",
                         "`timeout` (optional column) — a per-instance wall-clock cap in seconds, "
                         "enforced by the harness. Omit the column to leave instances uncapped.",
-                        "Any further columns are passed, in file order, to the tool's "
+                        "Every column is passed, in file order, to the tool's "
                         "`prepare_instance.sh` / `run_instance.sh`.",
                     ]},
                     {"type": "note", "text":
-                        "The dynamics, networks, and specification files your benchmarks reference "
-                        "live in the same repository; the tool's scripts locate them by the "
-                        "`benchmark` and `instance` names."},
+                        "The file is semicolon-separated, since `params` is JSON and contains "
+                        "commas; fields are left unquoted, so no value may contain a semicolon. It "
+                        "is generated from the benchmark/operation/dimension tables in "
+                        "`scripts/generate_instances.py` rather than hand-edited."},
                 ],
             },
         ],
