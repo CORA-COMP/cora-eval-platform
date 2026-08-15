@@ -1,0 +1,93 @@
+# Local dev stack for the CORA-COMP variant: Postgres + backend + the core frontend
+# shell + a Cloudflare quick-tunnel for remote viewing.
+#   docker compose up            -> frontend at http://localhost:5175
+#   docker compose logs cloudflared | grep trycloudflare   -> the public URL
+# Ports sit above the VNN (5173) and ARCH (5174) stacks so all three can run side by side.
+#
+# Fixed project name so the default network is `cora-comp_default` regardless of the
+# checkout directory (COMP_DOCKER_NETWORK below must match it).
+name: cora-comp
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cora
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    working_dir: /app
+    volumes:
+      - ./core:/core   # the core engine, vendored as a git submodule (pinned)
+      - .:/app
+      - coradata:/data   # local benchmark/results git repos (DATA_DIR)
+      - /var/run/docker.sock:/var/run/docker.sock   # local_docker: run node containers
+    environment:
+      DJANGO_SETTINGS_MODULE: deploy.settings
+      DATABASE_URL: postgres://postgres:postgres@db:5432/cora
+      ACTIVE_COMPETITION: cora
+      EXECUTION_BACKEND: local_docker
+      MAX_PARALLEL_NODES: "1"
+      SCHEDULER_AUTOSTART: "True"
+      AUTOMATIC_UPDATE_INTERVAL: "10"   # match the frontend's 10s poll so logs land promptly
+      SECRET_KEY: dev-insecure
+      DEBUG: "True"
+      ROOT_URL: http://backend:8000
+      DATA_DIR: /data
+      # local_docker execution wiring: where the node scripts live, the SSH key the
+      # backend uses to reach nodes, and the network node containers join (must be this
+      # compose project's network so backend<->node SSH and node->backend callbacks resolve).
+      SCRIPT_ROOT: /app/cora_comp
+      NODE_SSH_KEY: /root/.ssh/comp.pem
+      COMP_DOCKER_SSH_KEY: /root/.ssh/comp.pem
+      COMP_DOCKER_NETWORK: cora-comp_default
+      COMP_DEFAULT_DOCKER_IMAGE: ubuntu:22.04
+    command: >
+      sh -c "mkdir -p /root/.ssh &&
+             [ -f /root/.ssh/comp.pem ] || ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/comp.pem &&
+             chmod 400 /root/.ssh/comp.pem &&
+             find /app/cora_comp/scripts -name '*.sh' -exec chmod +x {} + &&
+             pip install -q -e /core -e . &&
+             python deploy/manage.py migrate &&
+             python deploy/manage.py init_settings &&
+             python deploy/manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: node:20-slim
+    working_dir: /app
+    volumes:
+      - ./core/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_URL: http://backend:8000   # Vite proxies /api and /update here
+      VITE_USE_POLLING: "1"               # bind-mount fs events don't cross to the container
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5175:5173"
+    depends_on:
+      - backend
+
+  # Cloudflare quick tunnel — free, no auth token. Prints an https://*.trycloudflare.com URL.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://frontend:5173
+    depends_on:
+      - frontend
+
+volumes:
+  pgdata:
+  frontend_node_modules:
+  coradata:

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- CORA-COMP lettermark tile: the navbar's red->blue gradient with a white C. Sized for
+     16px, so the mark is a single letter rather than the logo's set motif. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"
+     role="img" aria-label="CORA-COMP">
+  <defs>
+    <linearGradient id="coraFaviconGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="64">
+      <stop offset="0" stop-color="#dc2626"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="url(#coraFaviconGrad)"/>
+  <!-- A dashed circle rather than text, so it renders identically without a font: the
+       gap (~90° of the ~107 circumference) is rotated to face right, making the C. -->
+  <circle cx="32" cy="32" r="17" fill="none" stroke="#ffffff" stroke-width="8"
+          stroke-linecap="round" stroke-dasharray="78 28.8" transform="rotate(45 32 32)"/>
+</svg>
