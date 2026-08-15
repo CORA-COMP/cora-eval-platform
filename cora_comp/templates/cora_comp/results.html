@@ -100,7 +100,6 @@
     border-radius: 50%; background: red; animation: pulse 1.2s ease-in-out infinite;
   }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
-  @media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
   #plot svg { width: 100%; height: auto; display: block; }
   .grid { stroke: var(--line); stroke-width: 1; }
   .axis { stroke: #9ca3af; stroke-width: 1; }
@@ -207,8 +206,9 @@ const state = {
   data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
   subtractOverhead: true, includePrepare: false,
-  // The detail table's own narrowing, on the columns the page-level selectors do not cover.
-  details: { tool: 'all', instance: '', result: 'all', page: 1, pageSize: DEFAULT_PAGE_SIZE },
+  // The detail table's own narrowing, within the page selection: the plot stays where it is.
+  details: { tool: 'all', benchmark: 'all', result: 'all', instance: '',
+             page: 1, pageSize: DEFAULT_PAGE_SIZE },
 };
 const el = (id) => document.getElementById(id);
 let pollTimer = null;
@@ -524,6 +524,7 @@ function detailRows() {
   const needle = d.instance.trim().toLowerCase();
   const rows = state.data.measurements.filter((r) => matches(r)
     && (d.tool === 'all' || r.tool === d.tool)
+    && (d.benchmark === 'all' || r.benchmark === d.benchmark)
     && (d.result === 'all' || r.result === d.result)
     && (!needle || r.instance.toLowerCase().includes(needle)));
   rows.sort((a, b) => a.benchmark.localeCompare(b.benchmark)
@@ -588,20 +589,27 @@ function setOptions(select, values, selected) {
   return select.value;
 }
 
-/** The tool and result options come from the data, so a run that adds a tool or a verdict
+/** The options come from the data, so a run that adds a tool, a benchmark or a verdict
  *  shows up in the filters without a code change — and without touching the text box. */
 function syncDetailFilters() {
+  const facet = state.data.facets.find((f) => f.key === 'benchmark');
   const verdicts = [...new Set(state.data.measurements.map((r) => r.result).filter(Boolean))].sort();
   state.details.tool = setOptions(el('detail-tool'), state.data.tools, state.details.tool);
+  state.details.benchmark = setOptions(el('detail-benchmark'),
+    facet ? facet.options : [], state.details.benchmark);
   state.details.result = setOptions(el('detail-result'), verdicts, state.details.result);
 }
 
-/** The detail filters, built once: the columns the page-level selectors leave open. */
+/** The detail filters, built once: one per column of the table that is not a time. They
+ *  narrow the table alone — the benchmark selector at the top of the page moves the plot
+ *  with it, which is not what reading through one benchmark's rows calls for. */
 function buildDetailFilters() {
   const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
   el('detail-filters').innerHTML = `
     <div><label for="detail-tool">Tool</label>
       <select id="detail-tool"></select></div>
+    <div><label for="detail-benchmark">Benchmark</label>
+      <select id="detail-benchmark"></select></div>
     <div><label for="detail-result">Result</label>
       <select id="detail-result"></select></div>
     <div><label for="detail-instance">Instance contains</label>
@@ -618,6 +626,7 @@ function buildDetailFilters() {
     renderDetails();
   });
   onChange('detail-tool', 'tool');
+  onChange('detail-benchmark', 'benchmark');
   onChange('detail-result', 'result');
   onChange('detail-instance', 'instance');
   onChange('detail-page-size', 'pageSize', Number);
