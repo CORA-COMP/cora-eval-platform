@@ -158,9 +158,8 @@ class CoraCompetition(Competition):
                         "different libraries on continuous set representation.",
                 links=[
                     # The results view is this variant's own page (cora_comp/views.py),
-                    # not part of the shared shell, so it is reached by URL — but it is
-                    # part of the competition, hence the same prominence as the actions.
-                    {"label": "Results", "url": "/api/cora/results/", "primary": True},
+                    # not part of the shared shell, so it is reached by URL.
+                    {"label": "Results", "url": "/api/cora/results/"},
                     {"label": "CORA", "url": "https://tumcps.github.io/CORA/"},
                     {"label": "GitHub", "url": "https://github.com/CORA-COMP"},
                 ],
