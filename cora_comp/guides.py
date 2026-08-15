@@ -103,6 +103,11 @@ def toolkit_guide() -> Guide:
                         "is always the last argument) and writes its verdict to `<result-file>`.",
                     ]},
                     {"type": "note", "text":
+                        "Only `run_instance.sh` is timed, so the split between the two decides what "
+                        "gets measured: generate the operation's inputs in `prepare_instance.sh` "
+                        "and write them to disk, then read them back once in `run_instance.sh` and "
+                        "perform the operation `<repetition>` times, and nothing else."},
+                    {"type": "note", "text":
                         "The arguments are the interface version followed by the instance's "
                         "`instances.csv` columns, in file order — so a column added to the catalog "
                         "arrives as a further argument, before `<result-file>`. `<params>` is a JSON "
