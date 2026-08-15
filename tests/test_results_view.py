@@ -35,8 +35,9 @@ def _fixture():
             benchmarks[name] = benchmark
         instance = Instance.objects.create(
             benchmark=benchmark, name=instance_name,
-            spec={"benchmark": name, "instance": instance_name, "repetition": "100",
-                  "params": json.dumps({"operation": operation, "dim": 5, "device": "cpu"})},
+            spec={"benchmark": name, "instance": instance_name,
+                  "params": json.dumps({"set": name, "operation": operation, "dim": 5,
+                                        "device": "cpu", "repetition": 100})},
         )
         Result.objects.create(
             task=task, tool=tool, benchmark=benchmark, instance=instance,

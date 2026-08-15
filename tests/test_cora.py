@@ -168,8 +168,8 @@ def test_load_handler_loads_benchmarks_from_node(monkeypatch):
 
     monkeypatch.setattr(cora_steps, "_node_ip", lambda t: "1.2.3.4")
     monkeypatch.setattr(shell, "node_exec",
-                        lambda ip, cmd, **k: ("benchmark;instance;repetition;params\n"
-                                              'zonotope;matMul-1d;100;{"dim": 1}\n')
+                        lambda ip, cmd, **k: ("benchmark;instance;params\n"
+                                              'zonotope;matMul-1d;{"dim": 1}\n')
                         if "cat " in cmd else "deadbeef")
 
     step.handler.on_marked_done()

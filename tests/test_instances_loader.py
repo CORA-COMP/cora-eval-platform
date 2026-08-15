@@ -8,14 +8,14 @@ pytestmark = pytest.mark.django_db
 
 # The shape of the real catalog (github.com/CORA-COMP/benchmarks): semicolon-separated,
 # with an unquoted JSON `params` column.
-BENCHMARKS_CSV = """benchmark;instance;repetition;params
-interval;generateRandom-1d;100;{"dim": 1}
-interval;matMul-1d;100;{"dim": 1}
-interval;matMul-500d;100;{"dim": 500}
-zonotope;generateRandom-1d;100;{"dim": 1}
-zonotope;minkSum-1d;100;{"dim": 1}
-zonotope;minkSum-500d;100;{"dim": 500}
-zonotope;minkSum-1000d;100;{"dim": 1000}
+BENCHMARKS_CSV = """benchmark;instance;params
+interval;generateRandom-1d;{"dim": 1}
+interval;matMul-1d;{"dim": 1}
+interval;matMul-500d;{"dim": 500}
+zonotope;generateRandom-1d;{"dim": 1}
+zonotope;minkSum-1d;{"dim": 1}
+zonotope;minkSum-500d;{"dim": 500}
+zonotope;minkSum-1000d;{"dim": 1000}
 """
 
 
@@ -29,7 +29,7 @@ def test_parse_groups_rows_by_benchmark():
     from cora_comp.benchmarks import group_by_benchmark, parse_instances_csv
 
     header, rows = parse_instances_csv(BENCHMARKS_CSV)
-    assert header == ["benchmark", "instance", "repetition", "params"]
+    assert header == ["benchmark", "instance", "params"]
     assert len(rows) == 7
     groups = group_by_benchmark(rows)
     assert list(groups) == ["interval", "zonotope"]  # first-seen order preserved
@@ -47,8 +47,8 @@ def test_parse_keeps_the_json_params_column_intact():
     from cora_comp.benchmarks import parse_instances_csv
 
     _, rows = parse_instances_csv(
-        'benchmark;instance;repetition;params\n'
-        'zonotope;matMul-2d;100;{"dim": 2, "seed": 7}\n'
+        'benchmark;instance;params\n'
+        'zonotope;matMul-2d;{"dim": 2, "seed": 7}\n'
     )
     assert rows[0]["params"] == '{"dim": 2, "seed": 7}'
     assert json.loads(rows[0]["params"]) == {"dim": 2, "seed": 7}
@@ -74,7 +74,7 @@ def test_load_assigns_the_display_group():
     """The group is derived from the benchmark's name, so the catalog alone decides it."""
     from cora_comp.benchmarks import load_benchmarks_from_csv
 
-    csv_text = BENCHMARKS_CSV + 'zonotope-batched;minkSum-1d-b8;100;{"dim": 1}\ntest;startup-1d;1;{}\n'
+    csv_text = BENCHMARKS_CSV + 'zonotope-batched;minkSum-1d-b8;{"dim": 1}\ntest;startup-1d;{}\n'
     benchmarks = load_benchmarks_from_csv(
         repository="https://x/r", ref="abc123", owner=_user(), csv_text=csv_text,
     )
@@ -102,17 +102,17 @@ def test_load_creates_benchmarks_and_ordered_instances():
     assert zonotope.hash == "abc123"
     assert zonotope.repository.endswith("benchmarks")
     # Ordered header carried on the benchmark (jsonb-order-safe).
-    assert zonotope.extra["columns"] == ["benchmark", "instance", "repetition", "params"]
+    assert zonotope.extra["columns"] == ["benchmark", "instance", "params"]
 
     insts = list(Instance.objects.filter(benchmark=zonotope).order_by("order"))
     assert [i.name for i in insts] == [
         "generateRandom-1d", "minkSum-1d", "minkSum-500d", "minkSum-1000d",
     ]
     assert insts[0].spec == {"benchmark": "zonotope", "instance": "generateRandom-1d",
-                             "repetition": "100", "params": '{"dim": 1}'}
+                             "params": '{"dim": 1}'}
     # Positional args the harness passes, reconstructed via the ordered header.
     assert [insts[0].spec[c] for c in zonotope.extra["columns"]] == [
-        "zonotope", "generateRandom-1d", "100", '{"dim": 1}',
+        "zonotope", "generateRandom-1d", '{"dim": 1}',
     ]
 
 

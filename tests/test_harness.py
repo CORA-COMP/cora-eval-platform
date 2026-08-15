@@ -89,16 +89,16 @@ def test_json_params_column_reaches_the_tool_intact(tmp_path):
 
     # Writes the params argument it was handed into a file of its own (the harness runs
     # it with the tool dir as cwd), so the verdict CSV's commas can't be confused with
-    # the JSON's. Args are <version> <benchmark> <instance> <repetition> <params> <out>.
+    # the JSON's. Args are <version> <benchmark> <instance> <params> <out>.
     params_tool = (
         "#!/bin/sh\n"
         'for a in "$@"; do last="$a"; done\n'
-        'printf "%s" "$5" > seen_params.json\n'
+        'printf "%s" "$4" > seen_params.json\n'
         'printf "result\\nfinished\\n" > "$last"\n'
     )
     repo = _repo(tmp_path / "repo",
-                 'benchmark;instance;repetition;params\n'
-                 'zonotope;matMul-2d;100;{"dim": 2, "seed": 7}\n')
+                 'benchmark;instance;params\n'
+                 'zonotope;matMul-2d;{"dim": 2, "seed": 7}\n')
     tool = _tool(tmp_path / "tool", params_tool)
     out = str(tmp_path / "results.csv")
 
