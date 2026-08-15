@@ -10,14 +10,15 @@ pytestmark = pytest.mark.django_db
 def _fixture():
     """A tiny catalog with two benchmarks and one tool that ran every instance."""
     from comp_eval_platform.core.models import (
-        Benchmark, Category, Instance, Result, Task, Tool, User,
+        Benchmark, Category, Instance, Outcome, Result, Task, Tool, User,
     )
 
     user = User.objects.create_user(
         email=f"{uuid.uuid4().hex[:8]}@x.test", password="pw", enabled=True)
     category = Category.objects.create(name="CORA")
     tool = Tool.objects.create(category=category, name="CORA", base_image="img")
-    task = Task.objects.create(owner=user, tool=tool)
+    # A run that is over, so a test about live runs has to say so itself.
+    task = Task.objects.create(owner=user, tool=tool, outcome=Outcome.SUCCEEDED)
 
     rows = [
         ("test", "startup-1d-cpu", "startup", "finished", 0.05, 0.01),
@@ -117,6 +118,35 @@ def test_facets_fall_back_to_the_instance_name():
     # An instance name that ends in something else leaves the device facet empty, so the
     # row is simply not offered as a device choice.
     assert facet_values("test", "startup-1d", {})["device"] == ""
+
+
+def test_running_tools_are_reported_while_a_task_is_in_flight():
+    """The page marks a tool live and keeps polling while its run is unfinished."""
+    from comp_eval_platform.core.models import Outcome
+    from cora_comp.plots import plot_payload
+
+    _, tool, _, task = _fixture()
+    task.outcome = Outcome.RUNNING
+    task.save(update_fields=["outcome"])
+    assert plot_payload()["running"] == ["CORA"]
+
+    task.outcome = Outcome.SUCCEEDED
+    task.save(update_fields=["outcome"])
+    assert plot_payload()["running"] == []
+
+
+def test_a_tool_that_has_not_produced_a_result_yet_is_still_listed():
+    """So a run just started shows up as live instead of not at all."""
+    from comp_eval_platform.core.models import Category, Outcome, Task, Tool, User
+    from cora_comp.plots import plot_payload
+
+    _fixture()
+    category = Category.objects.get(name="CORA")
+    fresh = Tool.objects.create(category=category, name="CORA.py", base_image="img")
+    Task.objects.create(owner=User.objects.first(), tool=fresh, outcome=Outcome.RUNNING)
+    payload = plot_payload()
+    assert payload["tools"] == ["CORA", "CORA.py"]
+    assert payload["running"] == ["CORA.py"]
 
 
 def test_the_data_endpoint_needs_a_logged_in_user(client):

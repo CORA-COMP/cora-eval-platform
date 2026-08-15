@@ -129,10 +129,27 @@ def measurements() -> list:
     return list(latest.values())
 
 
+def running_tools() -> list:
+    """The tools with a run in flight — queued or executing. The page marks them live and
+    polls while any is, so a run in progress draws itself instance by instance."""
+    from comp_eval_platform.core.models import Task
+    from comp_eval_platform.core.models.execution import TERMINAL_OUTCOMES
+
+    names = (Task.objects
+             .filter(tool__isnull=False)
+             .exclude(outcome__in=TERMINAL_OUTCOMES)
+             .values_list("tool__name", flat=True))
+    return sorted(set(names))
+
+
 def plot_payload() -> dict:
     rows = measurements()
+    running = running_tools()
     return {
         "facets": facet_options(),
-        "tools": sorted({row["tool"] for row in rows}),
+        # A tool that is running but has produced nothing yet still belongs in the list,
+        # so the summary can show it as live rather than not at all.
+        "tools": sorted({row["tool"] for row in rows} | set(running)),
+        "running": running,
         "measurements": rows,
     }

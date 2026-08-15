@@ -79,6 +79,28 @@
   .verdict-unsupported { color: var(--muted); }
   .verdict-error, .verdict-timeout, .verdict-prepare_failed { color: #c62828; }
   .scroll { max-height: 560px; overflow: auto; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+  .filters label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; }
+  .filters select, .filters input {
+    font: inherit; font-size: .9rem; padding: 6px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; min-width: 170px;
+  }
+  .pager { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: .875rem; color: var(--muted); }
+  .pager button { font: inherit; font-size: .875rem; padding: 5px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .pager .spacer { flex: 1; }
+  /* A run in flight, next to its tool: the page is polling and this row is still growing.
+     Same dot as the shell's LiveIndicator — red, 10px, pulsing at 1.2s. */
+  .live {
+    display: inline-flex; align-items: center; gap: 6px; vertical-align: middle;
+    margin-left: 10px; font-size: .875rem; font-weight: 500; color: red; white-space: nowrap;
+  }
+  .live::before {
+    content: ''; display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%; background: red; animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+  @media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
   #plot svg { width: 100%; height: auto; display: block; }
   .grid { stroke: var(--line); stroke-width: 1; }
   .axis { stroke: #9ca3af; stroke-width: 1; }
@@ -142,7 +164,11 @@
 
   <div class="card">
     <h2>Detailed results</h2>
+    <!-- Built once and left alone by redraws, so a live poll cannot steal the focus out
+         of the instance box mid-word. -->
+    <div class="filters" id="detail-filters"></div>
     <div class="scroll"><div id="details"></div></div>
+    <div class="pager" id="detail-pager"></div>
   </div>
 </main>
 
@@ -169,12 +195,23 @@ const FINISHED = 'finished';
 //: baseline, which can round to zero; without a floor the axis has no bottom.
 const Y_FLOOR = 1e-3;
 
+//: How often the page refetches. While a run is in flight the plot is worth watching fill
+//: in; otherwise the page only has to notice that one has started.
+const POLL_LIVE_MS = 5000;
+const POLL_IDLE_MS = 60000;
+//: Rows per page of the detail table, and the choices offered.
+const PAGE_SIZES = [50, 100, 250, 1000];
+const DEFAULT_PAGE_SIZE = 100;
+
 const state = {
   data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
   subtractOverhead: true, includePrepare: false,
+  // The detail table's own narrowing, on the columns the page-level selectors do not cover.
+  details: { tool: 'all', instance: '', result: 'all', page: 1, pageSize: DEFAULT_PAGE_SIZE },
 };
 const el = (id) => document.getElementById(id);
+let pollTimer = null;
 
 function esc(text) {
   return String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -446,15 +483,34 @@ function renderPlot(series) {
 
 // --- tables ---------------------------------------------------------------
 
+function isLive(tool) {
+  return (state.data.running || []).includes(tool);
+}
+
+/** The marker on a tool whose run has not finished — its numbers are still moving. */
+function liveTag(tool) {
+  return isLive(tool) ? '<span class="live" title="run in flight">Live</span>' : '';
+}
+
 function renderSummary(series) {
   const host = el('summary');
-  if (!series.length) { host.innerHTML = '<p class="empty">Nothing measured yet.</p>'; return; }
+  const measured = new Set(series.map((s) => s.tool));
+  // A tool that has just started has no series yet; list it anyway, so the run is visible
+  // from its first second rather than from its first result.
+  const waiting = state.data.tools.filter((t) => !measured.has(t) && isLive(t));
+  if (!series.length && !waiting.length) {
+    host.innerHTML = '<p class="empty">Nothing measured yet.</p>';
+    return;
+  }
   const rows = series.map((s) => `<tr>
-      <td><span class="swatch" style="background:${s.color}"></span>${esc(s.tool)}</td>
+      <td><span class="swatch" style="background:${s.color}"></span>${esc(s.tool)}${liveTag(s.tool)}</td>
       <td class="num">${s.points.length}</td>
       <td class="num">${fmtTime(s.total)}</td>
       <td class="num">${fmtTime(s.base.run)}</td>
       <td class="num">${fmtTime(s.base.prepare)}</td>
+    </tr>`).join('') + waiting.map((tool) => `<tr>
+      <td>${esc(tool)}${liveTag(tool)}</td>
+      <td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
     </tr>`).join('');
   host.innerHTML = `<table><thead><tr>
       <th>Tool</th><th class="num">Finished</th><th class="num">Cumulative time (s)</th>
@@ -462,26 +518,109 @@ function renderSummary(series) {
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function renderDetails() {
-  const host = el('details');
-  const base = baselines(state.data.measurements);
-  const rows = state.data.measurements.filter(matches);
-  if (!rows.length) { host.innerHTML = '<p class="empty">No instances match this selection.</p>'; return; }
+/** The rows the detail table shows: the page selection, narrowed by its own filters. */
+function detailRows() {
+  const d = state.details;
+  const needle = d.instance.trim().toLowerCase();
+  const rows = state.data.measurements.filter((r) => matches(r)
+    && (d.tool === 'all' || r.tool === d.tool)
+    && (d.result === 'all' || r.result === d.result)
+    && (!needle || r.instance.toLowerCase().includes(needle)));
   rows.sort((a, b) => a.benchmark.localeCompare(b.benchmark)
     || a.instance.localeCompare(b.instance) || a.tool.localeCompare(b.tool));
-  const body = rows.map((r) => `<tr>
-      <td>${esc(r.tool)}</td>
-      <td>${esc(r.benchmark)}</td>
-      <td>${esc(r.instance)}</td>
-      <td class="verdict-${esc(r.result || 'unknown')}">${esc(r.result)}</td>
-      <td class="num">${fmtTime(r.prepare_time)}</td>
-      <td class="num">${fmtTime(r.time)}</td>
-      <td class="num">${r.result === FINISHED ? fmtTime(cost(r, base.get(r.tool))) : ''}</td>
-    </tr>`).join('');
-  host.innerHTML = `<table><thead><tr>
-      <th>Tool</th><th>Benchmark</th><th>Instance</th><th>Result</th>
-      <th class="num">Prepare (s)</th><th class="num">Run (s)</th><th class="num">Adjusted (s)</th>
-    </tr></thead><tbody>${body}</tbody></table>`;
+  return rows;
+}
+
+function renderDetails() {
+  const host = el('details'), scroller = host.parentElement, top = scroller.scrollTop;
+  const base = baselines(state.data.measurements);
+  const rows = detailRows();
+  const pageSize = state.details.pageSize;
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  // A filter that shortens the table, or a poll on the last page, must not leave the view
+  // past the end.
+  state.details.page = Math.min(Math.max(1, state.details.page), pages);
+  const from = (state.details.page - 1) * pageSize;
+  const page = rows.slice(from, from + pageSize);
+
+  if (!rows.length) {
+    host.innerHTML = '<p class="empty">No instances match this selection.</p>';
+  } else {
+    const body = page.map((r) => `<tr>
+        <td>${esc(r.tool)}</td>
+        <td>${esc(r.benchmark)}</td>
+        <td>${esc(r.instance)}</td>
+        <td class="verdict-${esc(r.result || 'unknown')}">${esc(r.result)}</td>
+        <td class="num">${fmtTime(r.prepare_time)}</td>
+        <td class="num">${fmtTime(r.time)}</td>
+        <td class="num">${r.result === FINISHED ? fmtTime(cost(r, base.get(r.tool))) : ''}</td>
+      </tr>`).join('');
+    host.innerHTML = `<table><thead><tr>
+        <th>Tool</th><th>Benchmark</th><th>Instance</th><th>Result</th>
+        <th class="num">Prepare (s)</th><th class="num">Run (s)</th><th class="num">Adjusted (s)</th>
+      </tr></thead><tbody>${body}</tbody></table>`;
+  }
+  renderPager(rows.length, from, page.length, pages);
+  scroller.scrollTop = top;  // a poll must not yank the table back to the top
+}
+
+function renderPager(total, from, shown, pages) {
+  const page = state.details.page;
+  el('detail-pager').innerHTML = total
+    ? `<span>${from + 1}–${from + shown} of ${total}</span>
+       <span class="spacer"></span>
+       <button id="page-prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+       <span>Page ${page} of ${pages}</span>
+       <button id="page-next" ${page >= pages ? 'disabled' : ''}>Next</button>`
+    : '';
+  const step = (delta) => { state.details.page += delta; renderDetails(); };
+  if (el('page-prev')) el('page-prev').addEventListener('click', () => step(-1));
+  if (el('page-next')) el('page-next').addEventListener('click', () => step(1));
+}
+
+/** Replace a selector's options, keeping the selection where it still exists. */
+function setOptions(select, values, selected) {
+  const markup = ['all', ...values]
+    .map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  if (select.innerHTML === markup) return selected;  // untouched, so an open dropdown stays open
+  select.innerHTML = markup;
+  select.value = values.includes(selected) ? selected : 'all';
+  return select.value;
+}
+
+/** The tool and result options come from the data, so a run that adds a tool or a verdict
+ *  shows up in the filters without a code change — and without touching the text box. */
+function syncDetailFilters() {
+  const verdicts = [...new Set(state.data.measurements.map((r) => r.result).filter(Boolean))].sort();
+  state.details.tool = setOptions(el('detail-tool'), state.data.tools, state.details.tool);
+  state.details.result = setOptions(el('detail-result'), verdicts, state.details.result);
+}
+
+/** The detail filters, built once: the columns the page-level selectors leave open. */
+function buildDetailFilters() {
+  const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
+  el('detail-filters').innerHTML = `
+    <div><label for="detail-tool">Tool</label>
+      <select id="detail-tool"></select></div>
+    <div><label for="detail-result">Result</label>
+      <select id="detail-result"></select></div>
+    <div><label for="detail-instance">Instance contains</label>
+      <input id="detail-instance" type="search" placeholder="e.g. matMul-500d"></div>
+    <div><label for="detail-page-size">Rows per page</label>
+      <select id="detail-page-size">${PAGE_SIZES.map(option).join('')}</select></div>`;
+  el('detail-page-size').value = String(state.details.pageSize);
+  syncDetailFilters();
+
+  // Any change starts over at page 1: page 7 of the old filter means nothing under the new.
+  const onChange = (id, key, transform = (v) => v) => el(id).addEventListener('input', (e) => {
+    state.details[key] = transform(e.target.value);
+    state.details.page = 1;
+    renderDetails();
+  });
+  onChange('detail-tool', 'tool');
+  onChange('detail-result', 'result');
+  onChange('detail-instance', 'instance');
+  onChange('detail-page-size', 'pageSize', Number);
 }
 
 // --- wiring ---------------------------------------------------------------
@@ -493,13 +632,14 @@ function draw() {
   renderDetails();
 }
 
-function fillSelectors() {
+/** A selector per facet the payload carries, so a facet added server-side needs no markup
+ *  here. "all" is always offered — on the device facet that is what plots cpu and gpu
+ *  together; the rest is whatever the loaded catalog contains, under the catalog's own
+ *  groups where the facet has them. Rebuilt only when the options themselves change, so a
+ *  poll leaves the selection alone. */
+function syncFacetSelectors() {
   const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
-  // A selector per facet the payload carries, so a facet added server-side needs no markup
-  // here. "all" is always offered — on the device facet that is what plots cpu and gpu
-  // together; the rest is whatever the loaded catalog contains, under the catalog's own
-  // groups where the facet has them.
-  el('facets').innerHTML = state.data.facets.map((facet) => {
+  const markup = state.data.facets.map((facet) => {
     const body = facet.groups
       ? facet.groups.map((g) =>
           `<optgroup label="${esc(g.label)}">${g.options.map(option).join('')}</optgroup>`).join('')
@@ -509,10 +649,18 @@ function fillSelectors() {
         <select id="facet-${esc(facet.key)}">${option('all')}${body}</select>
       </div>`;
   }).join('');
+  const host = el('facets');
+  if (host.innerHTML === markup) return;
+  host.innerHTML = markup;
   for (const facet of state.data.facets) {
     const select = el(`facet-${facet.key}`);
+    select.value = facet.options.includes(state.filters[facet.key]) ? state.filters[facet.key] : 'all';
+    state.filters[facet.key] = select.value;
     select.addEventListener('change', () => { state.filters[facet.key] = select.value; draw(); });
   }
+}
+
+function bindToggles() {
   el('subtract-overhead').addEventListener('change', (e) => {
     state.subtractOverhead = e.target.checked;
     draw();
@@ -521,6 +669,31 @@ function fillSelectors() {
     state.includePrepare = e.target.checked;
     draw();
   });
+}
+
+// --- polling --------------------------------------------------------------
+
+async function refresh() {
+  const res = await fetch('/api/cora/results/data/', { credentials: 'same-origin' });
+  if (!res.ok) return false;
+  state.data = await res.json();
+  syncFacetSelectors();
+  syncDetailFilters();
+  draw();
+  return true;
+}
+
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  const live = (state.data.running || []).length;
+  pollTimer = setTimeout(poll, live ? POLL_LIVE_MS : POLL_IDLE_MS);
+}
+
+async function poll() {
+  // A hidden tab still reschedules, so coming back finds a page that is only one interval
+  // stale rather than one that stopped following the run.
+  if (!document.hidden) await refresh();
+  schedulePoll();
 }
 
 async function boot() {
@@ -536,8 +709,14 @@ async function boot() {
   }
   state.data = await res.json();
   for (const facet of state.data.facets) state.filters[facet.key] = 'all';
-  fillSelectors();
+  syncFacetSelectors();
+  bindToggles();
+  buildDetailFilters();
   draw();
+
+  schedulePoll();
+  // Returning to the tab should not wait out the interval that elapsed while it was hidden.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 }
 
 boot();
