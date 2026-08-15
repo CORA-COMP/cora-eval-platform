@@ -178,6 +178,38 @@ def test_load_handler_loads_benchmarks_from_node(monkeypatch):
     assert b.published and b.hash == "deadbeef"  # sha from the node, not the empty submitted hash
 
 
+def test_a_tool_can_carry_its_own_run_environment(monkeypatch):
+    """``tool.extra["env"]`` reaches the node as exports, so one tool can be entered twice
+    in configurations it defines itself, without the platform knowing what they mean."""
+    from comp_eval_platform.core.models import Benchmark, Task, TaskStep, Tool
+
+    from cora_comp import kinds
+    from cora_comp import steps as cora_steps
+
+    cat = _category()
+    tool = Tool.objects.create(owner=_user(), category=cat, name="t", base_image="img",
+                               extra={"env": {"TOOL_MODE": "fast", "OMP_NUM_THREADS": 1,
+                                              "BAD NAME": "x", "INJECT": "a; rm -rf /"}})
+    b = Benchmark.objects.create(owner=_user(), category=cat, name="ACC", published=True)
+    task = Task.objects.create(owner=tool.owner, tool=tool)
+    step = TaskStep.objects.create(task=task, kind=kinds.RUN_BENCHMARK, order=0,
+                                   payload={"benchmark_id": str(b.id)})
+
+    sent = {}
+    monkeypatch.setattr(cora_steps, "_node_ip", lambda t: "1.2.3.4")
+    monkeypatch.setattr(cora_steps, "_ping", lambda d, s, params: sent.update(params))
+    step.handler.execute()
+
+    # A name or value that is not plain text is dropped: the exports are pasted into a
+    # script on the node, not escaped.
+    assert sent["tool_env"] == "export OMP_NUM_THREADS=1; export TOOL_MODE=fast;"
+
+    tool.extra = {}
+    tool.save(update_fields=["extra"])
+    step.handler.execute()
+    assert sent["tool_env"] == ""
+
+
 def test_run_handler_parses_and_stores_results(monkeypatch):
     """The run step reads the node's harness results.csv back and stores per-instance
     Results, keeping the tool's self-reported columns as extra."""

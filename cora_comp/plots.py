@@ -190,14 +190,34 @@ def running_tools() -> list:
     return sorted(set(names))
 
 
+def tool_order() -> list:
+    """Every tool name, oldest submission first.
+
+    The page colors a tool by its position in this list, so a color belongs to a tool for
+    good: filtering one out cannot shift the others, and a tool entered later takes the
+    next color rather than renumbering everyone before it.
+    """
+    from comp_eval_platform.core.models import Tool
+
+    order = []
+    for name in Tool.objects.order_by("created_at", "id").values_list("name", flat=True):
+        if name not in order:
+            order.append(name)
+    return order
+
+
 def plot_payload() -> dict:
     rows = measurements()
     running = running_tools()
+    # A tool that is running but has produced nothing yet still belongs in the list,
+    # so the summary can show it as live rather than not at all.
+    present = {row["tool"] for row in rows} | set(running)
+    order = tool_order()
+    tools = [name for name in order if name in present]
+    tools += sorted(present.difference(order))  # a result whose Tool row is gone
     return {
         "facets": facet_options(),
-        # A tool that is running but has produced nothing yet still belongs in the list,
-        # so the summary can show it as live rather than not at all.
-        "tools": sorted({row["tool"] for row in rows} | set(running)),
+        "tools": tools,
         "running": running,
         "measurements": rows,
     }

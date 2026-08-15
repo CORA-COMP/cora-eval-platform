@@ -149,6 +149,28 @@ def test_a_tool_that_has_not_produced_a_result_yet_is_still_listed():
     assert payload["running"] == ["CORA.py"]
 
 
+def test_tools_are_listed_by_first_submission():
+    """The page colors a tool by its place in this list, so it must not depend on the
+    name or on what is currently filtered in: oldest submission first, newcomers last."""
+    from comp_eval_platform.core.models import Category, Tool, User
+    from cora_comp.plots import plot_payload
+
+    _fixture()
+    category = Category.objects.get(name="CORA")
+    # A name that sorts before the incumbent: alphabetical order would put it first and
+    # hand CORA a different color than it had yesterday.
+    Tool.objects.create(category=category, name="ACORA", base_image="img")
+    Tool.objects.create(owner=User.objects.first(), category=category, name="CORA",
+                        base_image="img")  # a resubmission is not a new tool
+    assert plot_payload()["tools"] == ["CORA"]  # only the tools with something to show
+
+    from comp_eval_platform.core.models import Outcome, Task
+
+    Task.objects.create(owner=User.objects.first(), outcome=Outcome.RUNNING,
+                        tool=Tool.objects.get(name="ACORA"))
+    assert plot_payload()["tools"] == ["CORA", "ACORA"]
+
+
 def test_a_running_benchmark_is_measured_from_its_partial_csv():
     """Result rows land only when a benchmark finishes, so the page reads the active
     step's tailed results.csv — and prefers it over what the last run stored."""

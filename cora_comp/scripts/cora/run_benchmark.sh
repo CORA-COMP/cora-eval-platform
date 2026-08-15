@@ -10,8 +10,8 @@
 # ${ROOT_URL}/update/${task_id}/success|failure.
 #
 # Params (env, from the step handler): benchmark_ip task_id benchmark_id benchmark_name
-# version script_dir repository hash. ROOT_URL comes from the backend environment.
-# NODE_SSH_KEY locates the node key.
+# version script_dir repository hash tool_env. ROOT_URL comes from the backend
+# environment. NODE_SSH_KEY locates the node key.
 set -eu
 
 ssh_key="${NODE_SSH_KEY:-$HOME/.ssh/comp.pem}"
@@ -57,6 +57,11 @@ fi
 # The End superstage carries the instance count (results.csv rows, minus its header),
 # so the run needs no separate 'finished' line.
 export BENCHMARKS_DIR=/home/ubuntu/benchmarks_repo
+# The tool's own run-time environment (tool.extra['env']), inherited by every instance
+# script: what makes one tool enterable twice in different configurations. Logged as it
+# was pasted in, since it is part of what the numbers below mean.
+${tool_env:-}
+log_info 'tool environment: ${tool_env:-(none)}'
 results_file=/home/ubuntu/logs/results_${benchmark_id}.csv
 if python3 /home/ubuntu/harness.py benchmark \
     /home/ubuntu/benchmarks_repo \"${benchmark_name}\" \

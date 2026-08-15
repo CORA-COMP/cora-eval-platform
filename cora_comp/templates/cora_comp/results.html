@@ -341,12 +341,19 @@ function rgbToHsl(r, g, b) {
 // A tool keeps a CORA color, nudged in hue and lightness by a hash of its name — so two
 // tools landing on the same base color stay distinguishable, and the palette stays CORA's.
 function toolColor(name, index) {
-  const [r, g, b] = CORA_COLORS[index % CORA_COLORS.length];
+  const [r, g, b] = CORA_COLORS[Math.max(0, index) % CORA_COLORS.length];
   const [h, s, l] = rgbToHsl(r, g, b);
   const seed = hash(name);
   const hue = (h * 360 + ((seed % 25) - 12) + 360) % 360;
   const light = Math.min(0.72, Math.max(0.28, l + (((seed >> 5) % 13) - 6) / 100));
   return `hsl(${hue.toFixed(1)} ${(s * 100).toFixed(0)}% ${(light * 100).toFixed(0)}%)`;
+}
+
+/** A tool's color, from its place in the payload's tool list — which is ordered by first
+ *  submission. So a tool keeps its color whatever a filter removes, and a tool entered
+ *  later takes the next color instead of shifting everyone else's. */
+function colorOf(tool) {
+  return toolColor(tool, state.data.tools.indexOf(tool));
 }
 
 // --- series ---------------------------------------------------------------
@@ -396,11 +403,11 @@ function buildSeries() {
   }
   return state.data.tools
     .filter((tool) => byTool.has(tool))
-    .map((tool, i) => {
+    .map((tool) => {
       const costs = byTool.get(tool).sort((a, b) => a - b);
       let sum = 0;
       const points = costs.map((c, idx) => { sum += c; return { x: idx + 1, y: sum }; });
-      return { tool, color: toolColor(tool, i), points, total: sum, base: base.get(tool) };
+      return { tool, color: colorOf(tool), points, total: sum, base: base.get(tool) };
     });
 }
 
@@ -509,7 +516,7 @@ function renderSummary(series) {
       <td class="num">${fmtTime(s.base.run)}</td>
       <td class="num">${fmtTime(s.base.prepare)}</td>
     </tr>`).join('') + waiting.map((tool) => `<tr>
-      <td>${esc(tool)}${liveTag(tool)}</td>
+      <td><span class="swatch" style="background:${colorOf(tool)}"></span>${esc(tool)}${liveTag(tool)}</td>
       <td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
     </tr>`).join('');
   host.innerHTML = `<table><thead><tr>

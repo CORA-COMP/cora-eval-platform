@@ -1,6 +1,8 @@
 """CORA-COMP step handlers: fire a node script, the node curls back
 ``/update/<task_id>/…``, and the handler reads the artifacts off the node when the
 step is marked done."""
+import re
+
 from comp_eval_platform.compute.shell import _ping
 from comp_eval_platform.core.steps import StepHandler, register_step_handler
 
@@ -13,6 +15,11 @@ INTERFACE_VERSION = "v1"
 #: Subdirectory of ``scripts/`` holding this variant's node wrappers.
 SCRIPT_DIR = "cora"
 
+#: What a name and a value in ``tool.extra["env"]`` may look like. The exports are pasted
+#: into the script generated on the node, so only inert characters get through.
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_ENV_VALUE = re.compile(r"[A-Za-z0-9_.:,/=+-]*\Z")
+
 
 def _node_ip(task):
     node = task.node
@@ -21,6 +28,19 @@ def _node_ip(task):
 
 def _version(tool) -> str:
     return ((tool.extra if tool else {}) or {}).get("version") or INTERFACE_VERSION
+
+
+def _tool_env(tool) -> str:
+    """``tool.extra["env"]`` as shell exports for the tool's per-instance scripts.
+
+    The seam for entering one tool twice in configurations it defines itself — which
+    knob and what it means are the tool's business — as two catalog entries whose results
+    sit side by side instead of overwriting each other. Anything that is not a plain
+    name/value pair is dropped rather than escaped.
+    """
+    env = ((tool.extra if tool else {}) or {}).get("env") or {}
+    return " ".join(f"export {k}={v};" for k, v in sorted(env.items())
+                    if _ENV_NAME.match(str(k)) and _ENV_VALUE.match(str(v)))
 
 
 @register_step_handler
@@ -154,6 +174,7 @@ class CoraRunBenchmarkHandler(StepHandler):
             "script_dir": (tool.script_dir if tool else ".") or ".",
             "repository": b.repository,
             "hash": b.hash or "",
+            "tool_env": _tool_env(tool),
         })
 
     def while_active(self):
