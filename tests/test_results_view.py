@@ -37,7 +37,8 @@ def _fixture():
             benchmark=benchmark, name=instance_name,
             spec={"benchmark": name, "instance": instance_name,
                   "params": json.dumps({"set": name, "operation": operation, "dim": 5,
-                                        "device": "cpu", "repetition": 100})},
+                                        "device": instance_name.rsplit("-", 1)[-1],
+                                        "repetition": 100})},
         )
         Result.objects.create(
             task=task, tool=tool, benchmark=benchmark, instance=instance,
@@ -56,6 +57,7 @@ def test_facet_options_come_from_the_loaded_catalog():
     options = {f["key"]: f["options"] for f in facet_options()}
     assert options["benchmark"] == ["interval", "test", "zonotope"]
     assert options["operation"] == ["convHull", "matMul", "minkSum", "startup"]
+    assert options["device"] == ["cpu", "gpu"]
 
 
 def test_benchmark_selector_is_grouped():
@@ -80,7 +82,8 @@ def test_measurements_carry_the_verdict_times_and_facets():
     assert matmul["result"] == "finished"
     assert matmul["time"] == 0.30
     assert matmul["prepare_time"] == 0.02
-    assert matmul["facets"] == {"benchmark": "zonotope", "operation": "matMul"}
+    assert matmul["facets"] == {"benchmark": "zonotope", "operation": "matMul",
+                                "device": "cpu"}
     # An unsupported instance is still reported; the page decides what to plot.
     assert rows[("zonotope", "matMul-5d-gpu")]["result"] == "unsupported"
 
@@ -104,12 +107,16 @@ def test_a_rerun_replaces_its_predecessor():
     assert rows[0]["time"] == 0.11
 
 
-def test_operation_falls_back_to_the_instance_name():
-    """A catalog loaded before params carried the operation still groups correctly."""
+def test_facets_fall_back_to_the_instance_name():
+    """A catalog loaded before params carried these fields still groups correctly."""
     from cora_comp.plots import facet_values
 
-    assert facet_values("zonotope", "matMul-500d-cpu", {"params": ""})["operation"] == "matMul"
-    assert facet_values("zonotope", "matMul-500d-cpu", {})["operation"] == "matMul"
+    for spec in ({"params": ""}, {}, {"params": "not json"}):
+        assert facet_values("zonotope", "matMul-500d-gpu", spec) == {
+            "benchmark": "zonotope", "operation": "matMul", "device": "gpu"}
+    # An instance name that ends in something else leaves the device facet empty, so the
+    # row is simply not offered as a device choice.
+    assert facet_values("test", "startup-1d", {})["device"] == ""
 
 
 def test_the_data_endpoint_needs_a_logged_in_user(client):
@@ -123,7 +130,7 @@ def test_the_data_endpoint_serves_the_payload(client):
     payload = client.get("/api/cora/results/data/").json()
     assert payload["tools"] == ["CORA"]
     assert len(payload["measurements"]) == 5
-    assert [f["key"] for f in payload["facets"]] == ["benchmark", "operation"]
+    assert [f["key"] for f in payload["facets"]] == ["benchmark", "operation", "device"]
 
 
 def test_the_page_renders(client):

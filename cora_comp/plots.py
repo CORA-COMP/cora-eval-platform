@@ -13,37 +13,46 @@ import json
 from collections import OrderedDict
 
 #: The dimensions the results view filters on. ``benchmark`` is the row's own column;
-#: ``operation`` is read out of its params JSON.
+#: the rest are read out of its params JSON. Selecting "all" on the device facet is what
+#: puts cpu and gpu measurements in one plot.
 FACETS = [
     {"key": "benchmark", "label": "Benchmark"},
     {"key": "operation", "label": "Operation"},
+    {"key": "device", "label": "Device"},
 ]
 
 PARAMS_COLUMN = "params"
 OPERATION_KEY = "operation"
+DEVICE_KEY = "device"
 PREPARE_TIME_KEY = "prepare_time"
+
+#: Recognized in an instance name, for catalogs whose params predate the field.
+DEVICE_NAMES = ("cpu", "gpu")
 
 
 def facet_values(benchmark_name: str, instance_name: str, spec: dict) -> dict:
-    """One instance's value for each facet."""
+    """One instance's value for each facet. Older catalogs carry a fact only in the
+    instance name (``matMul-500d-cpu``), so each facet falls back to reading it."""
+    params = _params(spec)
+    parts = (instance_name or "").split("-")
+    device = params.get(DEVICE_KEY) or (parts[-1] if parts[-1] in DEVICE_NAMES else "")
     return {
         "benchmark": benchmark_name,
-        "operation": _operation(instance_name, spec),
+        "operation": str(params.get(OPERATION_KEY) or parts[0]),
+        "device": str(device),
     }
 
 
-def _operation(instance_name: str, spec: dict) -> str:
-    """The operation from the instance's params. Older catalogs put it only in the
-    instance name (``matMul-500d-cpu``), so that is the fallback."""
+def _params(spec: dict) -> dict:
+    """The instance's params as a dict; anything unparseable is no params at all."""
     raw = (spec or {}).get(PARAMS_COLUMN)
-    if raw:
-        try:
-            value = json.loads(raw) if isinstance(raw, str) else raw
-            if isinstance(value, dict) and value.get(OPERATION_KEY):
-                return str(value[OPERATION_KEY])
-        except (TypeError, ValueError):
-            pass
-    return (instance_name or "").split("-")[0]
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _float_or_none(value):

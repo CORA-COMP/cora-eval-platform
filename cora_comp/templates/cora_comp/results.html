@@ -116,14 +116,9 @@
 
 <main class="container">
   <div class="card controls">
-    <div class="control">
-      <label for="facet-benchmark">Benchmark</label>
-      <select id="facet-benchmark"><option value="all">all</option></select>
-    </div>
-    <div class="control">
-      <label for="facet-operation">Operation</label>
-      <select id="facet-operation"><option value="all">all</option></select>
-    </div>
+    <!-- One selector per facet the payload carries; display:contents keeps them in the
+         controls row rather than making the wrapper a flex item of its own. -->
+    <div id="facets" style="display:contents"></div>
     <div class="toggle">
       <input type="checkbox" id="subtract-overhead" checked>
       <label for="subtract-overhead" style="margin:0">subtract overhead</label>
@@ -175,7 +170,7 @@ const FINISHED = 'finished';
 const Y_FLOOR = 1e-3;
 
 const state = {
-  data: null, filters: { benchmark: 'all', operation: 'all' },
+  data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
   subtractOverhead: true, includePrepare: false,
 };
@@ -499,17 +494,23 @@ function draw() {
 }
 
 function fillSelectors() {
-  for (const facet of state.data.facets) {
-    const select = el(`facet-${facet.key}`);
-    if (!select) continue;
-    // "all" is always offered; the rest is whatever the loaded catalog contains,
-    // under the catalog's own groups where the facet has them.
-    const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
+  const option = (o) => `<option value="${esc(o)}">${esc(o)}</option>`;
+  // A selector per facet the payload carries, so a facet added server-side needs no markup
+  // here. "all" is always offered — on the device facet that is what plots cpu and gpu
+  // together; the rest is whatever the loaded catalog contains, under the catalog's own
+  // groups where the facet has them.
+  el('facets').innerHTML = state.data.facets.map((facet) => {
     const body = facet.groups
       ? facet.groups.map((g) =>
           `<optgroup label="${esc(g.label)}">${g.options.map(option).join('')}</optgroup>`).join('')
       : facet.options.map(option).join('');
-    select.innerHTML = option('all') + body;
+    return `<div class="control">
+        <label for="facet-${esc(facet.key)}">${esc(facet.label)}</label>
+        <select id="facet-${esc(facet.key)}">${option('all')}${body}</select>
+      </div>`;
+  }).join('');
+  for (const facet of state.data.facets) {
+    const select = el(`facet-${facet.key}`);
     select.addEventListener('change', () => { state.filters[facet.key] = select.value; draw(); });
   }
   el('subtract-overhead').addEventListener('change', (e) => {
