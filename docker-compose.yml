@@ -52,6 +52,9 @@ services:
       COMP_DOCKER_SSH_KEY: /root/.ssh/comp.pem
       COMP_DOCKER_NETWORK: cora-comp_default
       COMP_DEFAULT_DOCKER_IMAGE: ubuntu:22.04
+      # Pass the host's GPUs into node containers, for the catalog's gpu instances. Empty
+      # by default: --gpus all fails outright on a host without the NVIDIA runtime.
+      COMP_DOCKER_GPU: "${COMP_DOCKER_GPU:-}"
     command: >
       sh -c "mkdir -p /root/.ssh &&
              [ -f /root/.ssh/comp.pem ] || ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/comp.pem &&
