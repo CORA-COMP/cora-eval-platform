@@ -218,5 +218,4 @@ class CoraRunBenchmarkHandler(StepHandler):
         summary = summarize(records)
         if not summary:
             return
-        self.step.payload = {**(self.step.payload or {}), **summary}
-        self.step.save(update_fields=["payload"])
+        self.merge_payload(**summary)

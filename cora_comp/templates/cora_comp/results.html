@@ -125,6 +125,10 @@
       <select id="facet-operation"><option value="all">all</option></select>
     </div>
     <div class="toggle">
+      <input type="checkbox" id="subtract-overhead" checked>
+      <label for="subtract-overhead" style="margin:0">subtract overhead</label>
+    </div>
+    <div class="toggle">
       <input type="checkbox" id="include-prepare">
       <label for="include-prepare" style="margin:0">add prepare time</label>
     </div>
@@ -166,11 +170,15 @@ const CORA_COLORS = [
 ];
 
 const FINISHED = 'finished';
-//: Floor of the log axis. The first point of a series is one instance minus the startup
+//: Floor of the log axis. The first point of a series is one instance minus the overhead
 //: baseline, which can round to zero; without a floor the axis has no bottom.
 const Y_FLOOR = 1e-3;
 
-const state = { data: null, filters: { benchmark: 'all', operation: 'all' }, includePrepare: false };
+const state = {
+  data: null, filters: { benchmark: 'all', operation: 'all' },
+  // The default view is the set arithmetic alone: run time, interface overhead removed.
+  subtractOverhead: true, includePrepare: false,
+};
 const el = (id) => document.getElementById(id);
 
 function esc(text) {
@@ -316,9 +324,9 @@ function matches(row) {
     value === 'all' || row.facets[key] === value);
 }
 
-// The startup cost, estimated as the fastest instance the tool ran — the `test` benchmark
-// exists to be exactly that. Taken over ALL of a tool's instances, not the filtered ones,
-// so changing a selector does not move the baseline under the numbers.
+// The interface overhead, estimated as the fastest instance the tool ran — the `test`
+// benchmark exists to be exactly that. Taken over ALL of a tool's instances, not the
+// filtered ones, so changing a selector does not move the baseline under the numbers.
 function baselines(rows) {
   const byTool = new Map();
   for (const row of rows) {
@@ -337,8 +345,9 @@ function baselines(rows) {
 }
 
 function cost(row, base) {
-  let value = Math.max(0, (row.time ?? 0) - base.run);
-  if (state.includePrepare) value += Math.max(0, (row.prepare_time ?? 0) - base.prepare);
+  const overhead = state.subtractOverhead ? base : { run: 0, prepare: 0 };
+  let value = Math.max(0, (row.time ?? 0) - overhead.run);
+  if (state.includePrepare) value += Math.max(0, (row.prepare_time ?? 0) - overhead.prepare);
   return value;
 }
 
@@ -432,8 +441,12 @@ function renderPlot(series) {
   host.innerHTML = parts.join('');
 
   hint.textContent = 'Further right and lower is better: more instances finished for less '
-    + 'total time. Each tool’s startup cost — its fastest instance — is subtracted from '
-    + 'every measurement' + (state.includePrepare ? ', prepare time included.' : '.');
+    + 'total time. Plotting run time'
+    + (state.includePrepare ? ' plus prepare time' : '')
+    + (state.subtractOverhead
+      ? ', with each tool’s own overhead — its fastest instance — subtracted from every '
+        + 'measurement.'
+      : ', overhead included.');
 }
 
 // --- tables ---------------------------------------------------------------
@@ -450,7 +463,7 @@ function renderSummary(series) {
     </tr>`).join('');
   host.innerHTML = `<table><thead><tr>
       <th>Tool</th><th class="num">Finished</th><th class="num">Cumulative time (s)</th>
-      <th class="num">Startup (run, s)</th><th class="num">Startup (prepare, s)</th>
+      <th class="num">Overhead (run, s)</th><th class="num">Overhead (prepare, s)</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -499,6 +512,10 @@ function fillSelectors() {
     select.innerHTML = option('all') + body;
     select.addEventListener('change', () => { state.filters[facet.key] = select.value; draw(); });
   }
+  el('subtract-overhead').addEventListener('change', (e) => {
+    state.subtractOverhead = e.target.checked;
+    draw();
+  });
   el('include-prepare').addEventListener('change', (e) => {
     state.includePrepare = e.target.checked;
     draw();
