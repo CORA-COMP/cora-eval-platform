@@ -98,8 +98,12 @@
   .live::before {
     content: ''; display: inline-block; width: 10px; height: 10px;
     border-radius: 50%; background: red; animation: pulse 1.2s ease-in-out infinite;
+    animation-delay: inherit;  /* the phase the marker was rendered with, see pulsePhase() */
   }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+  /* The head of a curve whose run is still going — the same beat as the Live dot, in the
+     tool's own color, so the point that is about to move is the one that blinks. */
+  .live-head { animation: pulse 1.2s ease-in-out infinite; }
   #plot svg { width: 100%; height: auto; display: block; }
   .grid { stroke: var(--line); stroke-width: 1; }
   .axis { stroke: #9ca3af; stroke-width: 1; }
@@ -427,12 +431,15 @@ function niceTicksLinear(hi, count) {
   return ticks;
 }
 
+/** Every measured time, always to two decimals: a column of them lines up, and the eye
+ *  compares digits instead of formats. Anything under 5 ms therefore reads 0.00. */
 function fmtTime(v) {
-  if (v == null) return '';
-  if (v >= 100) return v.toFixed(0);
-  if (v >= 1) return v.toFixed(2);
-  if (v >= 0.001) return v.toFixed(3);
-  return v.toExponential(1);
+  return v == null ? '' : v.toFixed(2);
+}
+
+/** The log axis labels decades, not measurements, so 0.001 must not read as 0.00. */
+function fmtTick(v) {
+  return v >= 1 ? v.toFixed(0) : String(v);
 }
 
 function renderPlot(series) {
@@ -459,7 +466,7 @@ function renderPlot(series) {
   const parts = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cactus plot">`];
   for (const t of niceTicksLog(yMin, yMax)) {
     parts.push(`<line class="grid" x1="${M.left}" y1="${py(t)}" x2="${W - M.right}" y2="${py(t)}"/>`);
-    parts.push(`<text class="tick" x="${M.left - 8}" y="${py(t) + 4}" text-anchor="end">${fmtTime(t)}</text>`);
+    parts.push(`<text class="tick" x="${M.left - 8}" y="${py(t) + 4}" text-anchor="end">${fmtTick(t)}</text>`);
   }
   for (const t of niceTicksLinear(xMax, 10)) {
     parts.push(`<line class="grid" x1="${px(t)}" y1="${M.top}" x2="${px(t)}" y2="${H - M.bottom}"/>`);
@@ -474,7 +481,10 @@ function renderPlot(series) {
     const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
     parts.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round"/>`);
     const last = s.points[s.points.length - 1];
-    parts.push(`<circle cx="${px(last.x).toFixed(1)}" cy="${py(last.y).toFixed(1)}" r="3.5" fill="${s.color}"/>`);
+    // The curve's head pulses while the run is in flight — it is the point that moves.
+    const live = isLive(s.tool);
+    parts.push(`<circle class="${live ? 'live-head' : ''}" style="${live ? pulsePhase() : ''}" `
+      + `cx="${px(last.x).toFixed(1)}" cy="${py(last.y).toFixed(1)}" r="3.5" fill="${s.color}"/>`);
   }
   parts.push('</svg>');
   host.innerHTML = parts.join('');
@@ -494,9 +504,17 @@ function isLive(tool) {
   return (state.data.running || []).includes(tool);
 }
 
+/** Where in the 1.2s pulse the clock is, as a negative delay. A poll replaces these
+ *  elements, and a fresh element would otherwise restart its animation — every live
+ *  marker on the page instead picks the beat back up where the last one left off. */
+function pulsePhase() {
+  return `animation-delay:${-(Date.now() % 1200) / 1000}s`;
+}
+
 /** The marker on a tool whose run has not finished — its numbers are still moving. */
 function liveTag(tool) {
-  return isLive(tool) ? '<span class="live" title="run in flight">Live</span>' : '';
+  return isLive(tool)
+    ? `<span class="live" style="${pulsePhase()}" title="run in flight">Live</span>` : '';
 }
 
 function renderSummary(series) {
