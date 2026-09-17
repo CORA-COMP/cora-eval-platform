@@ -123,8 +123,10 @@ def test_a_group_scoreboard_counts_only_that_groups_benchmarks():
                               result="finished", time=time)
 
     comp = get_competition()
-    assert comp.score(track).rows == [{"tool": "cora", "finished": 3, "time": 7.0}]
-    assert comp.score_group(track, "sets").rows == [{"tool": "cora", "finished": 2, "time": 6.0}]
+    counts = {"unsupported": 0, "error": 0, "timeout": 0}
+    assert comp.score(track).rows == [{"tool": "cora", "finished": 3, **counts, "time": 7.0}]
+    assert comp.score_group(track, "sets").rows == [
+        {"tool": "cora", "finished": 2, **counts, "time": 6.0}]
     assert comp.score_group(track, "sets-batched").rows == []
 
 
@@ -275,7 +277,8 @@ def test_run_handler_parses_and_stores_results(monkeypatch):
     # A well-formed run freezes a green stats summary tallying the verdicts.
     step.refresh_from_db()
     assert step.payload["severity"] == "success"
-    assert step.payload["summary"]["verdicts"] == {"finished": 1, "unsupported": 0, "error": 0}
+    assert step.payload["summary"]["verdicts"] == {"finished": 1, "unsupported": 0, "error": 0,
+                                                   "timeout": 0}
 
 
 def test_parse_results_keeps_harness_time_and_tool_extras(tmp_path):
@@ -309,15 +312,16 @@ def test_summarize_buckets_verdicts():
 
     from cora_comp.summary import summarize
 
-    # The harness's own verdicts (timeout, prepare_failed) fall in with error, as does
-    # anything outside the tool's three-value vocabulary.
+    # A timeout has its own bucket; prepare_failed falls in with error, as does anything
+    # else outside the vocabulary.
     recs = [ResultRecord(instance=n, result=r, time=None) for n, r in
             [("a", "finished"), ("b", "unsupported"), ("c", "error"),
              ("d", "finished"), ("e", "timeout"), ("f", "prepare_failed")]]
     out = summarize(recs)
     assert out["severity"] == "success"
-    assert out["summary"]["verdicts"] == {"finished": 2, "unsupported": 1, "error": 3}
-    assert out["summary"]["order"] == ["finished", "unsupported", "error"]
+    assert out["summary"]["verdicts"] == {"finished": 2, "unsupported": 1, "error": 2,
+                                          "timeout": 1}
+    assert out["summary"]["order"] == ["finished", "unsupported", "error", "timeout"]
     assert summarize([]) is None  # malformed/empty → no green summary
 
 
@@ -330,8 +334,9 @@ def test_score_ranks_tools_without_a_category_column():
     tool = Tool.objects.create(owner=u, category=cat, name="cora", base_image="cora")
     bench = Benchmark.objects.create(owner=u, category=cat, name="ACC", published=True)
     task = Task.objects.create(owner=u, tool=tool)
-    # Only `finished` counts; the time of every instance still adds up.
-    for result, t in [("finished", 1.0), ("unsupported", 2.0), ("prepare_failed", 0.5)]:
+    # Each verdict has its column; only finished instances add to the time.
+    for result, t in [("finished", 1.0), ("finished", 0.25), ("unsupported", 2.0),
+                      ("timeout", 60.0), ("error", 3.0), ("prepare_failed", 0.5)]:
         Result.objects.create(task=task, tool=tool, benchmark=bench, category=cat,
                               result=result, time=t)
 
@@ -339,8 +344,9 @@ def test_score_ranks_tools_without_a_category_column():
     track.benchmarks.add(bench)
 
     board = get_competition().score(track)
-    assert board.columns == ["tool", "finished", "time"]
-    assert board.rows == [{"tool": "cora", "finished": 1, "time": 3.5}]
+    assert board.columns == ["tool", "finished", "unsupported", "error", "timeout", "time"]
+    assert board.rows == [{"tool": "cora", "finished": 2, "unsupported": 1, "error": 2,
+                           "timeout": 1, "time": 1.25}]
 
 
 def test_overview_labels_benchmark_task_by_category():
