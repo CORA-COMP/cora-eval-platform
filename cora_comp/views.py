@@ -22,7 +22,6 @@ def results_page(request):
     branding = comp.presentation().branding
     brand = comp.display_name or comp.name
     return render(request, "cora_comp/results.html", {
-        "authenticated": request.user.is_authenticated,
         "brand": brand,
         "year": datetime.date.today().year,
         "branding": {
@@ -34,7 +33,6 @@ def results_page(request):
 
 
 def results_data(request):
-    """Every measured instance, with the facet values to filter it by."""
-    if not request.user.is_authenticated:
-        return JsonResponse({"detail": "Authentication required."}, status=403)
+    """Every measured instance, with the facet values to filter it by; public, like a
+    competition's results table."""
     return JsonResponse(plot_payload())

@@ -148,7 +148,7 @@
   footer p { margin: 0; font-size: .875rem; color: var(--muted); }
 </style>
 </head>
-<body data-authenticated="{{ authenticated|yesno:"1,0" }}">
+<body>
 
 <div class="navbar">
   <div class="container">
@@ -859,10 +859,6 @@ function showUnavailable(message) {
 
 async function boot() {
   await bootChrome();
-  if (document.body.dataset.authenticated !== '1') {
-    showUnavailable('Log in to view results — <a href="/login">log in</a>.');
-    return;
-  }
   const res = await fetch('/api/cora/results/data/', { credentials: 'same-origin' });
   if (!res.ok) {
     showUnavailable('Could not load results.');
