@@ -277,7 +277,8 @@ def test_run_handler_parses_and_stores_results(monkeypatch):
     # A well-formed run freezes a green stats summary tallying the verdicts.
     step.refresh_from_db()
     assert step.payload["severity"] == "success"
-    assert step.payload["summary"]["verdicts"] == {"finished": 1, "unsupported": 0, "error": 0}
+    assert step.payload["summary"]["verdicts"] == {"finished": 1, "unsupported": 0, "error": 0,
+                                                   "timeout": 0}
 
 
 def test_parse_results_keeps_harness_time_and_tool_extras(tmp_path):
@@ -311,15 +312,16 @@ def test_summarize_buckets_verdicts():
 
     from cora_comp.summary import summarize
 
-    # The harness's own verdicts (timeout, prepare_failed) fall in with error, as does
-    # anything outside the tool's three-value vocabulary.
+    # A timeout has its own bucket; prepare_failed falls in with error, as does anything
+    # else outside the vocabulary.
     recs = [ResultRecord(instance=n, result=r, time=None) for n, r in
             [("a", "finished"), ("b", "unsupported"), ("c", "error"),
              ("d", "finished"), ("e", "timeout"), ("f", "prepare_failed")]]
     out = summarize(recs)
     assert out["severity"] == "success"
-    assert out["summary"]["verdicts"] == {"finished": 2, "unsupported": 1, "error": 3}
-    assert out["summary"]["order"] == ["finished", "unsupported", "error"]
+    assert out["summary"]["verdicts"] == {"finished": 2, "unsupported": 1, "error": 2,
+                                          "timeout": 1}
+    assert out["summary"]["order"] == ["finished", "unsupported", "error", "timeout"]
     assert summarize([]) is None  # malformed/empty → no green summary
 
 

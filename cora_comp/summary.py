@@ -1,28 +1,21 @@
 """Turn a benchmark run's normalized records into a step stats summary.
 
-A run is judged only on whether each instance ran: timing is the harness's business, so
-a tool reports one of three verdicts — it finished, the operation is unsupported (a
-library with no GPU, say), or it failed. Any parsed run is "green"; the tally is what
+A run is judged only on whether each instance ran: a tool reports one of three verdicts
+— it finished, the operation is unsupported (a library with no GPU, say), or it failed —
+and the harness adds ``timeout``. Any parsed run is "green"; the tally is what
 distinguishes a good one.
 """
 from __future__ import annotations
 
 #: The buckets shown, in reading order.
-VERDICTS = ["finished", "unsupported", "error"]
-
-_FINISHED = {"finished"}
-_UNSUPPORTED = {"unsupported"}
+VERDICTS = ["finished", "unsupported", "error", "timeout"]
 
 
 def _bucket(result: str) -> str:
-    """Anything the tool did not report as finished or unsupported is an error — which
-    also catches the harness's own verdicts (``timeout``, ``prepare_failed``)."""
+    """The verdict's own bucket; anything else — including the harness's
+    ``prepare_failed`` — is an error."""
     r = (result or "").strip().lower()
-    if r in _FINISHED:
-        return "finished"
-    if r in _UNSUPPORTED:
-        return "unsupported"
-    return "error"
+    return r if r in VERDICTS else "error"
 
 
 def summarize(records) -> dict | None:
