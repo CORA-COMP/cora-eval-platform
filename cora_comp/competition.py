@@ -21,6 +21,9 @@ from .results import parse_results
 #: The one verdict that counts when scoring a track. Everything else — ``unsupported``,
 #: ``error``, and the harness's own ``timeout``/``prepare_failed`` — did not run.
 FINISHED = "finished"
+#: The scoreboard's verdict columns, in reading order.
+SCORE_VERDICTS = (FINISHED, "unsupported", "error", "timeout")
+SCORE_COLUMNS = ["tool", *SCORE_VERDICTS, "time"]
 
 
 class CoraCompetition(Competition):
@@ -123,8 +126,9 @@ class CoraCompetition(Competition):
 
     # (5) Scoring ----------------------------------------------------------
     def score(self, track) -> Scoreboard:
-        """Per tool: instances finished, and total time over the track's benchmarks. With
-        one category there is no category column to break the ranking down by."""
+        """Per tool: instances per verdict, and the total time of the finished ones, over
+        the track's benchmarks. With one category there is no category column to break
+        the ranking down by."""
         return self._score(track.benchmarks.all())
 
     def score_group(self, track, group: str) -> Scoreboard:
@@ -137,16 +141,21 @@ class CoraCompetition(Competition):
         from comp_eval_platform.core.models import Result
 
         benchmark_ids = benchmarks.values_list("id", flat=True)
-        agg = defaultdict(lambda: {"finished": 0, "time": 0.0})
+        agg = defaultdict(lambda: {**dict.fromkeys(SCORE_VERDICTS, 0), "time": 0.0})
         for r in Result.objects.filter(benchmark_id__in=benchmark_ids).select_related("tool"):
             row = agg[r.tool.name]
             row["tool"] = r.tool.name
-            if (r.result or "").strip().lower() == FINISHED:
-                row["finished"] += 1
-            row["time"] += r.time or 0.0
+            verdict = (r.result or "").strip().lower()
+            # The harness's prepare_failed, like anything unrecognized, is a run that failed.
+            row[verdict if verdict in SCORE_VERDICTS else "error"] += 1
+            # A timeout's time is the cap and an unsupported one's is nothing measured.
+            if verdict == FINISHED:
+                row["time"] += r.time or 0.0
+        for row in agg.values():
+            row["time"] = round(row["time"], 3)
         return Scoreboard(
-            columns=["tool", "finished", "time"],
-            rows=sorted(agg.values(), key=lambda x: (-x["finished"], x["time"])),
+            columns=SCORE_COLUMNS,
+            rows=sorted(agg.values(), key=lambda x: (-x[FINISHED], x["time"])),
         )
 
     # (6) Presentation / export -------------------------------------------
@@ -154,7 +163,7 @@ class CoraCompetition(Competition):
         return Presentation(
             result_columns=["instance", "result", "time"],
             submission_fields=[{"name": "base_image", "type": "text"}],
-            score_columns=["tool", "finished", "time"],
+            score_columns=SCORE_COLUMNS,
             branding=Branding(
                 # Gradient's leading color, so all primary accents match the navbar.
                 primary_color="#dc2626",

@@ -123,8 +123,10 @@ def test_a_group_scoreboard_counts_only_that_groups_benchmarks():
                               result="finished", time=time)
 
     comp = get_competition()
-    assert comp.score(track).rows == [{"tool": "cora", "finished": 3, "time": 7.0}]
-    assert comp.score_group(track, "sets").rows == [{"tool": "cora", "finished": 2, "time": 6.0}]
+    counts = {"unsupported": 0, "error": 0, "timeout": 0}
+    assert comp.score(track).rows == [{"tool": "cora", "finished": 3, **counts, "time": 7.0}]
+    assert comp.score_group(track, "sets").rows == [
+        {"tool": "cora", "finished": 2, **counts, "time": 6.0}]
     assert comp.score_group(track, "sets-batched").rows == []
 
 
@@ -330,8 +332,9 @@ def test_score_ranks_tools_without_a_category_column():
     tool = Tool.objects.create(owner=u, category=cat, name="cora", base_image="cora")
     bench = Benchmark.objects.create(owner=u, category=cat, name="ACC", published=True)
     task = Task.objects.create(owner=u, tool=tool)
-    # Only `finished` counts; the time of every instance still adds up.
-    for result, t in [("finished", 1.0), ("unsupported", 2.0), ("prepare_failed", 0.5)]:
+    # Each verdict has its column; only finished instances add to the time.
+    for result, t in [("finished", 1.0), ("finished", 0.25), ("unsupported", 2.0),
+                      ("timeout", 60.0), ("error", 3.0), ("prepare_failed", 0.5)]:
         Result.objects.create(task=task, tool=tool, benchmark=bench, category=cat,
                               result=result, time=t)
 
@@ -339,8 +342,9 @@ def test_score_ranks_tools_without_a_category_column():
     track.benchmarks.add(bench)
 
     board = get_competition().score(track)
-    assert board.columns == ["tool", "finished", "time"]
-    assert board.rows == [{"tool": "cora", "finished": 1, "time": 3.5}]
+    assert board.columns == ["tool", "finished", "unsupported", "error", "timeout", "time"]
+    assert board.rows == [{"tool": "cora", "finished": 2, "unsupported": 1, "error": 2,
+                           "timeout": 1, "time": 1.25}]
 
 
 def test_overview_labels_benchmark_task_by_category():
