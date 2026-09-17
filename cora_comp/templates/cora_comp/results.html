@@ -104,7 +104,22 @@
   /* The head of a curve whose run is still going — the same beat as the Live dot, in the
      tool's own color, so the point that is about to move is the one that blinks. */
   .live-head { animation: pulse 1.2s ease-in-out infinite; }
+  #plot { position: relative; }
   #plot svg { width: 100%; height: auto; display: block; }
+  .hover-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+  /* The readout at the hovered rank; it flips to the cursor's left past mid-plot. */
+  .plot-tip {
+    position: absolute; top: 12px; pointer-events: none; z-index: 2;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 8px 12px; font-size: .8125rem;
+    white-space: nowrap;
+  }
+  .plot-tip .head { font-weight: 600; margin-bottom: 4px; }
+  .plot-tip table { border-collapse: collapse; }
+  .plot-tip td { padding: 2px 6px; }
+  .plot-tip td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .plot-tip .inst { color: var(--muted); }
+  .plot-tip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
   .grid { stroke: var(--line); stroke-width: 1; }
   .axis { stroke: #9ca3af; stroke-width: 1; }
   .tick { fill: var(--muted); font-size: 11px; }
@@ -209,6 +224,7 @@ const PAGE_SIZES = [50, 100, 250, 1000];
 const DEFAULT_PAGE_SIZE = 100;
 
 const state = {
+  hoverRank: null,  // the cactus rank under the pointer, kept across live redraws
   data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
   subtractOverhead: true, includePrepare: false,
@@ -405,14 +421,17 @@ function buildSeries() {
   for (const row of all) {
     if (!matches(row) || row.result !== FINISHED) continue;
     if (!byTool.has(row.tool)) byTool.set(row.tool, []);
-    byTool.get(row.tool).push(cost(row, base.get(row.tool)));
+    byTool.get(row.tool).push({ cost: cost(row, base.get(row.tool)), label: `${row.benchmark} / ${row.instance}` });
   }
   return state.data.tools
     .filter((tool) => byTool.has(tool))
     .map((tool) => {
-      const costs = byTool.get(tool).sort((a, b) => a - b);
+      const runs = byTool.get(tool).sort((a, b) => a.cost - b.cost);
       let sum = 0;
-      const points = costs.map((c, idx) => { sum += c; return { x: idx + 1, y: sum }; });
+      const points = runs.map((r, idx) => {
+        sum += r.cost;
+        return { x: idx + 1, y: sum, cost: r.cost, label: r.label };
+      });
       return { tool, color: colorOf(tool), points, total: sum, base: base.get(tool) };
     });
 }
@@ -437,6 +456,11 @@ function niceTicksLinear(hi, count) {
  *  compares digits instead of formats. Anything under 5 ms therefore reads 0.00. */
 function fmtTime(v) {
   return v == null ? '' : v.toFixed(2);
+}
+
+/** Hover values span microseconds to hours, so they keep three significant digits. */
+function fmtHover(v) {
+  return v >= 100 ? v.toFixed(0) : v.toPrecision(3);
 }
 
 /** The log axis labels decades, not measurements, so 0.001 must not read as 0.00. */
@@ -488,8 +512,53 @@ function renderPlot(series) {
     parts.push(`<circle class="${live ? 'live-head' : ''}" style="${live ? pulsePhase() : ''}" `
       + `cx="${px(last.x).toFixed(1)}" cy="${py(last.y).toFixed(1)}" r="3.5" fill="${s.color}"/>`);
   }
+  parts.push('<g id="plot-hover"></g>');
+  // Transparent, on top: it receives the pointer over the whole plotting area.
+  parts.push(`<rect id="plot-hit" x="${M.left}" y="${M.top}" width="${W - M.left - M.right}" `
+    + `height="${H - M.top - M.bottom}" fill="transparent"/>`);
   parts.push('</svg>');
-  host.innerHTML = parts.join('');
+  host.innerHTML = parts.join('') + '<div class="plot-tip" id="plot-tip" hidden></div>';
+
+  const svg = host.querySelector('svg');
+  const hit = el('plot-hit');
+  const toRank = (ev) => {
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    const x = pt.matrixTransform(svg.getScreenCTM().inverse()).x;
+    const rank = Math.round(((x - M.left) / (W - M.left - M.right)) * Math.max(1, xMax));
+    return Math.min(xMax, Math.max(1, rank));
+  };
+  hit.addEventListener('mousemove', (ev) => { state.hoverRank = toRank(ev); showHover(); });
+  hit.addEventListener('mouseleave', () => { state.hoverRank = null; showHover(); });
+
+  function showHover() {
+    const layer = el('plot-hover'), tip = el('plot-tip');
+    const k = state.hoverRank;
+    if (k == null || k > xMax) { layer.innerHTML = ''; tip.hidden = true; return; }
+    const at = series.map((s) => ({ s, p: s.points[k - 1] }));
+    const marks = [`<line class="hover-line" x1="${px(k)}" y1="${M.top}" x2="${px(k)}" y2="${H - M.bottom}"/>`];
+    for (const { s, p } of at) {
+      if (p) marks.push(`<circle cx="${px(p.x)}" cy="${py(p.y)}" r="4.5" fill="${s.color}" stroke="var(--paper)" stroke-width="1.5"/>`);
+    }
+    layer.innerHTML = marks.join('');
+    // Fastest first: the same order the curves have at this rank, bottom to top.
+    const rows = at.slice().sort((a, b) => (a.p ? a.p.y : Infinity) - (b.p ? b.p.y : Infinity))
+      .map(({ s, p }) => `<tr><td><span class="sw" style="background:${s.color}"></span>${esc(s.tool)}</td>`
+        + (p
+          ? `<td class="num">${fmtHover(p.y)} s</td><td class="num">+${fmtHover(p.cost)} s</td><td class="inst">${esc(p.label)}</td>`
+          : `<td class="num">—</td><td class="num"></td><td class="inst">finished only ${s.points.length}</td>`)
+        + '</tr>')
+      .join('');
+    tip.innerHTML = `<div class="head">Instance #${k} (sorted by cost)</div>`
+      + `<table><tr class="inst"><td></td><td class="num">total</td><td class="num">this one</td><td></td></tr>${rows}</table>`;
+    tip.hidden = false;
+    // Positioned in CSS pixels of the rendered plot, which is scaled from the viewBox.
+    const scale = svg.getBoundingClientRect().width / W;
+    const x = px(k) * scale;
+    const right = px(k) > (M.left + W - M.right) / 2;
+    tip.style.left = right ? `${Math.max(0, x - tip.offsetWidth - 12)}px` : `${x + 12}px`;
+  }
+  showHover();
 
   hint.textContent = 'Further right and lower is better: more instances finished for less '
     + 'total time. Plotting run time'
