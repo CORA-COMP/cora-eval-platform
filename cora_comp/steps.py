@@ -80,9 +80,6 @@ class CoraInstallHandler(StepHandler):
             "tool_dir": "tool",
         })
 
-    def retry_until_success(self) -> bool:
-        return True  # installs are flaky (network); retry rather than fail the task
-
 
 @register_step_handler
 class CoraLoadHandler(StepHandler):
@@ -104,9 +101,6 @@ class CoraLoadHandler(StepHandler):
             "repository": self.step.payload.get("repository", ""),
             "hash": self.step.payload.get("hash", ""),
         })
-
-    def retry_until_success(self) -> bool:
-        return True  # clones are flaky (network); retry rather than fail the task
 
     def on_marked_done(self):
         """Read the cloned ``instances.csv`` off the node and load it. The node is still
