@@ -1,0 +1,154 @@
+# Production website: Postgres, the Django backend, and a Caddy container that serves
+# the built frontend and proxies the API. Submissions run on a separate worker machine
+# (compose.worker.yml), reached through an SSH tunnel from this stack.
+#
+#   docker-compose -p cora-comp -f deploy/production/compose.web.yml up -d --build
+#
+# Needs deploy/production/.env (see .env.example) and deploy/production/ssh/ (see README).
+# Written for docker-compose 1.29, so no top-level `name:`; pass `-p cora-comp`.
+# Command lines after the first keep their line breaks (they are more indented than the
+# `sh -c` line), so a command split across lines needs a trailing `\`.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: cora
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cora"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Forwards the worker service, which listens only on the worker's loopback: it runs
+  # containers with no authentication of its own.
+  worker-tunnel:
+    image: alpine:3.20
+    restart: unless-stopped
+    volumes:
+      - ./ssh:/etc/cora-ssh:ro
+    command: >
+      sh -c "apk add --no-cache openssh-client >/dev/null &&
+             install -d -m 700 /root/.ssh && cp /etc/cora-ssh/* /root/.ssh/ && chmod 600 /root/.ssh/* &&
+             exec ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+             -L 0.0.0.0:9001:127.0.0.1:9001 cora-worker"
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../core:/core
+      - ../..:/app
+      - coradata:/data
+      # The node key: kept across restarts so running nodes stay reachable.
+      - nodekey:/root/.ssh/node
+      - ./ssh:/etc/cora-ssh:ro
+    networks:
+      default:
+        # `backend` alone is ambiguous for the web container, which also sits on the
+        # host proxy's network next to other stacks' backends.
+        aliases:
+          - cora-backend
+    ports:
+      # Loopback only: the Django admin is reachable through an SSH tunnel, not the site.
+      - "127.0.0.1:${BACKEND_PORT:-8002}:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: deploy.settings
+      DATABASE_URL: postgres://cora:${POSTGRES_PASSWORD}@db:5432/cora
+      ACTIVE_COMPETITION: cora
+      EXECUTION_BACKEND: remote_docker
+      REMOTE_DOCKER_WORKER_URL: worker-tunnel
+      REMOTE_DOCKER_WORKER_PORT: "9001"
+      # Labels the worker's containers as this deployment's; the hostname default changes
+      # with every recreated container.
+      EVAL_SERVICE_ID: cora-comp
+      MAX_PARALLEL_NODES: "${MAX_PARALLEL_NODES:-1}"
+      SCHEDULER_AUTOSTART: "True"
+      AUTOMATIC_UPDATE_INTERVAL: "10"
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
+      # Where job containers on the worker send their callbacks.
+      ROOT_URL: ${ROOT_URL}
+      DATA_DIR: /data
+      SCRIPT_ROOT: /app/cora_comp
+      NODE_SSH_KEY: /root/.ssh/node/comp.pem
+      COMP_DOCKER_SSH_KEY: /root/.ssh/node/comp.pem
+    command: >
+      sh -c "([ -f /root/.ssh/node/comp.pem ] || ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/node/comp.pem) &&
+             chmod 400 /root/.ssh/node/comp.pem &&
+             cp /etc/cora-ssh/* /root/.ssh/ && chmod 600 /root/.ssh/config /root/.ssh/known_hosts /root/.ssh/id_worker &&
+             find /app/cora_comp/scripts -name '*.sh' -exec chmod +x {} + &&
+             pip install -q -e /core -e . &&
+             python deploy/manage.py migrate &&
+             python deploy/manage.py collectstatic --noinput -v 0 &&
+             python deploy/manage.py init_settings &&
+             exec gunicorn --chdir /app --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 120 \
+             comp_eval_platform.wsgi:application"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/competition/"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+    depends_on:
+      db:
+        condition: service_healthy
+      worker-tunnel:
+        condition: service_started
+
+  # One-shot: builds the frontend into a volume the web container serves. Runs after the
+  # backend is up, since the build embeds the competition's branding from its API.
+  frontend-build:
+    image: node:24-slim
+    working_dir: /app
+    volumes:
+      - ../../core/frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_dist:/app/dist
+    environment:
+      VITE_API_URL: http://cora-backend:8000
+    command: sh -c "npm ci --ignore-scripts --no-audit --no-fund && npm run build"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - frontend_dist:/srv:ro
+    ports:
+      - "${WEB_PORT:-5175}:80"
+    networks:
+      default:
+      proxy:
+        aliases:
+          - cora-web
+    depends_on:
+      frontend-build:
+        condition: service_completed_successfully
+
+networks:
+  # The host's shared reverse proxy (the ARCH stack's Caddy) reaches `cora-web` here.
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-arch-submission-system_arch-network}
+
+volumes:
+  pgdata:
+  coradata:
+  nodekey:
+  frontend_node_modules:
+  frontend_dist:

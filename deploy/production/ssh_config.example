@@ -1,0 +1,16 @@
+# Copy to deploy/production/ssh/config on the website machine, next to id_worker (a key
+# the worker account accepts) and known_hosts (the worker's host key).
+Host cora-worker
+    HostName tars.cps.cit.tum.de
+    User ladner
+    IdentityFile /root/.ssh/id_worker
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+
+# Job containers sit on the worker's job network (JOBS_SUBNET in compose.worker.yml),
+# which only the worker can route to.
+Host 172.29.*
+    ProxyJump cora-worker
+    # Container IPs are reused with fresh host keys.
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
