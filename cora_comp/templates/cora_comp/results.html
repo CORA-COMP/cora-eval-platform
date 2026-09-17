@@ -65,7 +65,7 @@
   main { padding-top: 32px; }
   .card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 24px; margin-bottom: 24px; }
   .card h2 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 16px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; margin-bottom: 20px; }
   .control label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; }
   select { font: inherit; font-size: .95rem; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; min-width: 200px; }
   .toggle { display: flex; align-items: center; gap: 8px; padding-bottom: 9px; font-size: .95rem; }
@@ -162,24 +162,6 @@
 </div>
 
 <main class="container">
-  <div class="card controls">
-    <!-- One selector per facet the payload carries; display:contents keeps them in the
-         controls row rather than making the wrapper a flex item of its own. -->
-    <div id="facets" style="display:contents"><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div></div>
-    <div class="toggle">
-      <input type="checkbox" id="subtract-overhead" checked>
-      <label for="subtract-overhead" style="margin:0">subtract overhead</label>
-    </div>
-    <div class="toggle">
-      <input type="checkbox" id="include-prepare">
-      <label for="include-prepare" style="margin:0">add prepare time</label>
-    </div>
-    <div class="toggle">
-      <input type="checkbox" id="log-scale" checked>
-      <label for="log-scale" style="margin:0">log time axis</label>
-    </div>
-  </div>
-
   <div class="card">
     <h2>Tools</h2>
     <div id="summary"><div class="sk-rows"><span class="sk sk-text" style="width:100%"></span><span class="sk sk-text" style="width:92%"></span><span class="sk sk-text" style="width:96%"></span></div></div>
@@ -187,6 +169,23 @@
 
   <div class="card">
     <h2>Cactus plot</h2>
+    <div class="controls">
+      <!-- One selector per facet the payload carries; display:contents keeps them in the
+           controls row rather than making the wrapper a flex item of its own. -->
+      <div id="facets" style="display:contents"><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div></div>
+      <div class="toggle">
+        <input type="checkbox" id="subtract-overhead" checked>
+        <label for="subtract-overhead" style="margin:0">subtract overhead</label>
+      </div>
+      <div class="toggle">
+        <input type="checkbox" id="include-prepare">
+        <label for="include-prepare" style="margin:0">add prepare time</label>
+      </div>
+      <div class="toggle">
+        <input type="checkbox" id="log-scale" checked>
+        <label for="log-scale" style="margin:0">log time axis</label>
+      </div>
+    </div>
     <div id="plot"><span class="sk sk-plot"></span></div>
     <p class="hint" id="plot-hint"></p>
   </div>
