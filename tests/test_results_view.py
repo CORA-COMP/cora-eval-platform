@@ -218,6 +218,12 @@ def test_the_page_renders(client):
     assert client.get("/api/cora/results/").status_code == 200
 
 
+def test_the_page_shows_placeholders_until_the_data_arrives(client):
+    html = client.get("/api/cora/results/").content.decode()
+    for host in ('id="summary"', 'id="plot"', 'id="details"'):
+        assert f'{host}><div class="sk-rows">' in html or f'{host}><span class="sk' in html
+
+
 def test_the_page_is_rendered_with_the_competitions_branding(client):
     """The first paint must already be CORA-COMP's: a page that starts from the generic
     look and restyles itself after a fetch flashes the wrong theme on every load."""
