@@ -167,17 +167,21 @@
       <input type="checkbox" id="include-prepare">
       <label for="include-prepare" style="margin:0">add prepare time</label>
     </div>
+    <div class="toggle">
+      <input type="checkbox" id="log-scale" checked>
+      <label for="log-scale" style="margin:0">log time axis</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Tools</h2>
+    <div id="summary"></div>
   </div>
 
   <div class="card">
     <h2>Cactus plot</h2>
     <div id="plot"></div>
     <p class="hint" id="plot-hint"></p>
-  </div>
-
-  <div class="card">
-    <h2>Tools</h2>
-    <div id="summary"></div>
   </div>
 
   <div class="card">
@@ -228,7 +232,7 @@ const state = {
   hoverRank: null,  // the cactus rank under the pointer, kept across live redraws
   data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
-  subtractOverhead: true, includePrepare: false,
+  subtractOverhead: true, includePrepare: false, logScale: true,
   // The detail table's own narrowing, within the page selection: the plot stays where it is.
   details: { tool: 'all', benchmark: 'all', result: 'all', instance: '',
              page: 1, pageSize: DEFAULT_PAGE_SIZE },
@@ -442,6 +446,16 @@ function niceTicksLinear(hi, count) {
   return ticks;
 }
 
+/** Round steps (1, 2 or 5 times a power of ten) from 0 to the first one at or above `hi`. */
+function niceTicksTime(hi, count) {
+  const raw = hi / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((f) => f * mag).find((v) => v >= raw);
+  const ticks = [];
+  for (let i = 0; i <= Math.ceil(hi / step - 1e-9); i++) ticks.push(i * step);
+  return { ticks, step };
+}
+
 /** Every measured time, always to two decimals: a column of them lines up, and the eye
  *  compares digits instead of formats. Anything under 5 ms therefore reads 0.00. */
 function fmtTime(v) {
@@ -453,8 +467,9 @@ function fmtHover(v) {
   return v >= 100 ? v.toFixed(0) : v.toPrecision(3);
 }
 
-/** The log axis labels decades, not measurements, so 0.001 must not read as 0.00. */
-function fmtTick(v) {
+/** Axis labels are round values, not measurements, so 0.001 must not read as 0.00. */
+function fmtTick(v, step) {
+  if (step !== undefined) return v.toFixed(Math.max(0, -Math.floor(Math.log10(step))));
   return v >= 1 ? v.toFixed(0) : String(v);
 }
 
@@ -469,20 +484,30 @@ function renderPlot(series) {
   const W = 900, H = 480, M = { top: 16, right: 24, bottom: 48, left: 68 };
   const xMax = Math.max(...series.map((s) => s.points.length));
   const yValues = series.flatMap((s) => s.points.map((p) => p.y)).filter((v) => v > 0);
-  const yMin = Math.max(Y_FLOOR, Math.min(...yValues, 1));
-  const yMax = Math.max(...yValues, yMin * 10);
+  const log = state.logScale;
+  let yMin, yMax, yTicks, yStep;
+  if (log) {
+    yMin = Math.max(Y_FLOOR, Math.min(...yValues, 1));
+    yMax = Math.max(...yValues, yMin * 10);
+    yTicks = niceTicksLog(yMin, yMax);
+  } else {
+    ({ ticks: yTicks, step: yStep } = niceTicksTime(Math.max(...yValues, Y_FLOOR), 6));
+    yMin = 0;
+    yMax = yTicks[yTicks.length - 1];
+  }
 
   const px = (x) => M.left + (x / Math.max(1, xMax)) * (W - M.left - M.right);
   const py = (y) => {
-    const v = Math.max(y, yMin);
-    const t = (Math.log10(v) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin) || 1);
+    const t = log
+      ? (Math.log10(Math.max(y, yMin)) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin) || 1)
+      : Math.max(y, 0) / yMax;
     return H - M.bottom - t * (H - M.top - M.bottom);
   };
 
   const parts = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cactus plot">`];
-  for (const t of niceTicksLog(yMin, yMax)) {
+  for (const t of yTicks) {
     parts.push(`<line class="grid" x1="${M.left}" y1="${py(t)}" x2="${W - M.right}" y2="${py(t)}"/>`);
-    parts.push(`<text class="tick" x="${M.left - 8}" y="${py(t) + 4}" text-anchor="end">${fmtTick(t)}</text>`);
+    parts.push(`<text class="tick" x="${M.left - 8}" y="${py(t) + 4}" text-anchor="end">${fmtTick(t, yStep)}</text>`);
   }
   for (const t of niceTicksLinear(xMax, 10)) {
     parts.push(`<line class="grid" x1="${px(t)}" y1="${M.top}" x2="${px(t)}" y2="${H - M.bottom}"/>`);
@@ -491,7 +516,7 @@ function renderPlot(series) {
   parts.push(`<line class="axis" x1="${M.left}" y1="${M.top}" x2="${M.left}" y2="${H - M.bottom}"/>`);
   parts.push(`<line class="axis" x1="${M.left}" y1="${H - M.bottom}" x2="${W - M.right}" y2="${H - M.bottom}"/>`);
   parts.push(`<text class="axis-label" x="${(M.left + W - M.right) / 2}" y="${H - 10}" text-anchor="middle">instances finished (sorted by cost)</text>`);
-  parts.push(`<text class="axis-label" transform="translate(16 ${(M.top + H - M.bottom) / 2}) rotate(-90)" text-anchor="middle">cumulative time (s, log)</text>`);
+  parts.push(`<text class="axis-label" transform="translate(16 ${(M.top + H - M.bottom) / 2}) rotate(-90)" text-anchor="middle">cumulative time (s${log ? ', log' : ''})</text>`);
 
   for (const s of series) {
     const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
@@ -779,6 +804,10 @@ function bindToggles() {
   });
   el('include-prepare').addEventListener('change', (e) => {
     state.includePrepare = e.target.checked;
+    draw();
+  });
+  el('log-scale').addEventListener('change', (e) => {
+    state.logScale = e.target.checked;
     draw();
   });
 }
