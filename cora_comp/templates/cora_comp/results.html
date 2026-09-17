@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Results</title>
-<link rel="icon" href="/api/competition/assets/favicon.png">
+<title>Results — {{ brand }}</title>
+<link rel="icon" href="{{ branding.favicon|default:'/api/competition/assets/favicon.png' }}">
 <style>
   /* The shell's look, reproduced for this server-rendered page. Colors and the brand
-     name are not hardcoded: they come from /api/competition/, the same source the React
-     shell boots from, so the two cannot drift on branding. */
+     name are not hardcoded: the view renders in the competition's presentation, the same
+     source the React shell boots from, so the two cannot drift on branding. */
   :root {
-    --primary: #1f2937;
-    --gradient: #1f2937;
+    --primary: {{ branding.primary_color|default:'#1f2937' }};
+    --gradient: {{ branding.navbar_gradient|default:branding.primary_color|default:'#1f2937' }};
     --ink: #1f2937;
     --muted: #6b7280;
     --line: #e5e7eb;
@@ -134,7 +134,7 @@
 
 <div class="navbar">
   <div class="container">
-    <a class="brand" href="/" id="brand">Eval Platform</a>
+    <a class="brand" href="/" id="brand">{{ brand }} {{ year }}</a>
     <div class="spacer"></div>
     <div class="menu-wrap">
       <button class="menu-btn" id="menu-btn" aria-haspopup="true" aria-expanded="false">
@@ -193,8 +193,9 @@
 <div class="container footer-wave">
   <svg id="footer-wave" viewBox="0 0 320 32" preserveAspectRatio="none" aria-hidden="true"></svg>
 </div>
-<footer><div class="container"><p id="copyright"></p></div></footer>
+<footer><div class="container"><p id="copyright">© {{ brand }} {{ year }}. All rights reserved.</p></div></footer>
 
+{{ branding|json_script:"branding" }}
 {% verbatim %}
 <script>
 // CORA's default colors (the MATLAB defaults), as [r,g,b] in 0..1.
@@ -304,31 +305,20 @@ function renderMenu(user) {
 }
 
 async function bootChrome() {
-  const year = new Date().getFullYear();
-  let comp = null, user = null;
-  try { comp = await (await fetch('/api/competition/')).json(); } catch { /* keep defaults */ }
-  try {
-    const res = await fetch('/api/auth/me/', { credentials: 'same-origin' });
-    if (res.ok) user = await res.json();
-  } catch { /* anonymous */ }
-
-  const brand = (comp && comp.display_name) || 'Eval Platform';
-  const branding = (comp && comp.presentation && comp.presentation.branding) || {};
+  // Colors, brand and favicon are rendered in by the view; only the waves are drawn here,
+  // before the first await, so they appear with the rest of the first paint.
+  const branding = JSON.parse(el('branding').textContent);
   const stops = gradientStops(branding.navbar_gradient);
-  const root = document.documentElement.style;
-  if (branding.primary_color) root.setProperty('--primary', branding.primary_color);
-  root.setProperty('--gradient', branding.navbar_gradient || branding.primary_color || '#1f2937');
-
-  document.title = `Results — ${brand}`;
-  el('brand').textContent = `${brand} ${year}`;
-  el('copyright').textContent = `© ${brand} ${year}. All rights reserved.`;
-  if (branding.favicon) document.querySelector("link[rel='icon']").href = branding.favicon;
-
   const waveColor = stops ? null : (branding.primary_color || '#1f2937');
   for (const svg of [el('crescendo'), el('footer-wave')]) svg.style.color = waveColor || '';
   paintWave(el('crescendo'), crescendoPath(), 'cwave', stops, 5);
   paintWave(el('footer-wave'), dampedPath(), 'fwave', stops, 4);
 
+  let user = null;
+  try {
+    const res = await fetch('/api/auth/me/', { credentials: 'same-origin' });
+    if (res.ok) user = await res.json();
+  } catch { /* anonymous */ }
   renderMenu(user);
   const btn = el('menu-btn'), menu = el('menu');
   btn.addEventListener('click', (e) => {
