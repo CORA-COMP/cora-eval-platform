@@ -42,7 +42,8 @@ ssh-keyscan tars.cps.cit.tum.de > ssh/known_hosts
 cd ../.. && docker-compose -p cora-comp -f deploy/production/compose.web.yml up -d --build
 ```
 
-The site is served on `WEB_PORT` (5175). For the public name, add a site to the host
+The site is served on `WEB_PORT` (5175); until the public name resolves, set `ROOT_URL`
+to `http://cpsvm5.cit.tum.de:5175`. For the public name, add a site to the host
 proxy's Caddyfile (`/opt/arch/submission-system/docker/prod/caddyfile`) and reload it
 (`docker exec arch-caddy caddy reload --config /etc/caddy/Caddyfile`):
 
@@ -68,4 +69,4 @@ docker compose -p cora-comp -f deploy/production/compose.worker.yml up -d --buil
 ```
 
 The website rebuilds the frontend on every `up`. Restart the backend (`restart backend`)
-to pick up Python changes.
+to pick up Python changes, and `web` to pick up a changed `Caddyfile`.

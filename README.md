@@ -29,6 +29,11 @@ To try a submission:
 - Benchmarks: <https://github.com/CORA-COMP/benchmarks> — the catalog, submitted as a whole
 - Tool: <https://github.com/CORA-COMP/example_toolkit> — a runnable skeleton to start from
 
+## Deployment
+
+The production setup (website and a separate worker machine) is described in
+[deploy/production/README.md](deploy/production/README.md).
+
 ## Contributing
 
 Developing the platform (tests, updating the core engine, architecture) is covered in
