@@ -77,22 +77,24 @@ def load_benchmarks_from_csv(*, repository, ref, owner, csv_text):
     time)."""
     from comp_eval_platform.core.models import Benchmark, Instance
 
-    from .category import ensure_category
+    from .category import ensure_category, initial_group
 
     category = ensure_category()
     header, rows = parse_instances_csv(csv_text)
     groups = group_by_benchmark(rows)
     benchmarks = []
     for name, group in groups.items():
-        benchmark, _ = Benchmark.objects.update_or_create(
+        benchmark, created = Benchmark.objects.update_or_create(
             category=category, name=name,
             defaults={
                 "owner": owner, "repository": repository, "hash": ref,
-                # No `group`: a new benchmark takes core's default, and a reload keeps
-                # whatever group an admin assigned.
                 "published": True, "extra": {"columns": header},
             },
         )
+        # The name only seeds the group: a reload keeps whatever an admin assigned since.
+        if created:
+            benchmark.group = initial_group(name)
+            benchmark.save(update_fields=["group"])
         benchmark.instances.all().delete()
         Instance.objects.bulk_create([
             Instance(benchmark=benchmark, name=row[INSTANCE_COLUMN], spec=row, order=i)
