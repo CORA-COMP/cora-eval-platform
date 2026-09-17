@@ -216,3 +216,22 @@ def test_the_data_endpoint_serves_the_payload(client):
 
 def test_the_page_renders(client):
     assert client.get("/api/cora/results/").status_code == 200
+
+
+def test_the_page_is_rendered_with_the_competitions_branding(client):
+    """The first paint must already be CORA-COMP's: a page that starts from the generic
+    look and restyles itself after a fetch flashes the wrong theme on every load."""
+    from comp_eval_platform.competitions import get_competition
+
+    comp = get_competition()
+    branding = comp.presentation().branding
+    html = client.get("/api/cora/results/").content.decode()
+
+    assert f"--primary: {branding.primary_color};" in html
+    assert f"--gradient: {branding.navbar_gradient};" in html
+    assert f'href="{branding.favicon}"' in html
+    assert comp.display_name in html
+    assert "Eval Platform" not in html
+    assert "fetch('/api/competition/')" not in html
+    # The page's script reads it from here instead.
+    assert '<script id="branding" type="application/json">' in html
