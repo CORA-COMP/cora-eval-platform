@@ -48,11 +48,11 @@ class CoraCompetition(Competition):
 
         ensure_category()
 
-    def benchmark_groups(self) -> list:
-        """The groups the catalog is shown in, in display order (see category.py)."""
+    def benchmark_groups(self) -> tuple:
+        """The groups the catalog is shown and run in, in that order (see category.py)."""
         from .category import GROUPS
 
-        return list(GROUPS)
+        return GROUPS
 
     def load_benchmarks(self, *, category_name, repository, ref, owner) -> list:
         """Fan the central ``instances.csv`` (at ``repository@ref``) into one Benchmark
@@ -70,8 +70,6 @@ class CoraCompetition(Competition):
     # (2) Step-graph builder ----------------------------------------------
     def build_steps(self, task) -> list:
         from comp_eval_platform.core.models import Benchmark, TaskStep
-
-        from .category import group_order
 
         order = 0
 
@@ -96,9 +94,8 @@ class CoraCompetition(Competition):
             selected = task.tool.extra.get("benchmarks")
             if selected:
                 benchmarks = benchmarks.filter(id__in=selected)
-            # Run group by group (test, then sets, then their batched twins), so the
-            # pipeline reads in the same order the catalog is shown in.
-            for b in sorted(benchmarks, key=lambda b: (group_order(b.name), b.name)):
+            # Run group by group, so the pipeline reads in the order the catalog is shown in.
+            for b in self.order_benchmarks(benchmarks):
                 steps.append(add(kinds.RUN_BENCHMARK, benchmark_id=str(b.id)))
             steps.append(add(SHUTDOWN_KIND))
         else:
@@ -128,11 +125,18 @@ class CoraCompetition(Competition):
     def score(self, track) -> Scoreboard:
         """Per tool: instances finished, and total time over the track's benchmarks. With
         one category there is no category column to break the ranking down by."""
+        return self._score(track.benchmarks.all())
+
+    def score_group(self, track, group: str) -> Scoreboard:
+        """``score`` over the track's benchmarks in ``group``."""
+        return self._score(track.benchmarks.filter(group=self.validate_benchmark_group(group)))
+
+    def _score(self, benchmarks) -> Scoreboard:
         from collections import defaultdict
 
         from comp_eval_platform.core.models import Result
 
-        benchmark_ids = track.benchmarks.values_list("id", flat=True)
+        benchmark_ids = benchmarks.values_list("id", flat=True)
         agg = defaultdict(lambda: {"finished": 0, "time": 0.0})
         for r in Result.objects.filter(benchmark_id__in=benchmark_ids).select_related("tool"):
             row = agg[r.tool.name]
