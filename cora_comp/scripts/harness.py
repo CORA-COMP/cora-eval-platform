@@ -24,6 +24,7 @@ file a tool writes its verdict to.
 import csv
 import json
 import os
+import random
 import signal
 import subprocess
 import sys
@@ -247,14 +248,26 @@ def _write_results(out_csv, extra_cols, results):
     os.replace(tmp, out_csv)
 
 
-def run_benchmark(repo_dir, benchmark_name, tool_dir, out_csv, version):
-    """Run every instance of ``benchmark_name`` (from ``repo_dir/instances.csv``) and
-    write ``out_csv``. The output header is stable within the benchmark: the union of
+def select_instances(rows, mode):
+    """The instances an evaluation mode runs, in catalog order: ``all`` of them, the
+    ``first`` one, or ``random10``, ten drawn at random. Anything else runs all."""
+    if mode == "first":
+        return rows[:1]
+    if mode == "random10":
+        picked = set(random.sample(range(len(rows)), min(10, len(rows))))
+        return [r for i, r in enumerate(rows) if i in picked]
+    return rows
+
+
+def run_benchmark(repo_dir, benchmark_name, tool_dir, out_csv, version, mode="all"):
+    """Run the instances of ``benchmark_name`` (from ``repo_dir/instances.csv``) that the
+    evaluation ``mode`` selects, and write ``out_csv``. The output header is stable within the benchmark: the union of
     tool-reported extra columns (first-seen order) sits between the identifiers and the
     harness timings. The file is rewritten after each instance so the backend can show
     results as they land, not only at the end."""
     header, rows = _read_instances(os.path.join(repo_dir, "instances.csv"))
-    target = [r for r in rows if r.get(BENCHMARK_COLUMN) == benchmark_name]
+    target = select_instances(
+        [r for r in rows if r.get(BENCHMARK_COLUMN) == benchmark_name], mode)
 
     # The shell wrapper owns the benchmark's outer (double) superstage; each instance
     # then gets its own thick stage.
@@ -291,14 +304,14 @@ def main(argv):
     signal.signal(signal.SIGTERM, _handle_term)
 
     if len(argv) >= 7 and argv[1] == "benchmark":
-        run_benchmark(argv[2], argv[3], argv[4], argv[5], argv[6])
+        run_benchmark(*argv[2:8])
         return 0
     if len(argv) >= 6 and argv[1] == "instance":
         out = run_instance(argv[2], argv[3], argv[5:], _parse_timeout(argv[4]))
         print(json.dumps(out))
         return 0
     sys.stderr.write(
-        "usage: harness.py benchmark <repo_dir> <benchmark_name> <tool_dir> <out_csv> <version>\n"
+        "usage: harness.py benchmark <repo_dir> <benchmark_name> <tool_dir> <out_csv> <version> [all|first|random10]\n"
         "       harness.py instance  <tool_dir> <version> <timeout|inf> <col1> [col2 ...]\n"
     )
     return 2

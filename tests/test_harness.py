@@ -149,3 +149,23 @@ def test_missing_result_file_falls_back_to_a_verdict(tmp_path):
     out = str(tmp_path / "results.csv")
     rows = _run_benchmark(repo, "ACC", tool, out)
     assert [r["result"] for r in rows] == ["error", "error"]
+
+
+def _harness_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("cora_harness", HARNESS)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_evaluation_modes_select_instances_in_catalog_order():
+    select = _harness_module().select_instances
+    rows = [{"instance": str(i)} for i in range(25)]
+    assert select(rows, "all") == rows
+    assert select(rows, "first") == rows[:1]
+    picked = select(rows, "random10")
+    assert len(picked) == 10 and picked == sorted(picked, key=lambda r: int(r["instance"]))
+    assert select(rows[:3], "random10") == rows[:3]
+    assert select(rows, "unknown") == rows

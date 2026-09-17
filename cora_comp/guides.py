@@ -65,6 +65,9 @@ def toolkit_guide() -> Guide:
                     "`run_instance.sh v1 <benchmark> <instance> <params> "
                     "<result-file>` — every column of the instance's `instances.csv` row, in file "
                     "order, with the results file appended.",
+                    "The evaluation mode picks which instances of each benchmark run: all of "
+                    "them (the final evaluation, which admins may close to regular users), the "
+                    "first one, or ten at random, to test a submission quickly.",
                     "The harness owns timing: it measures wall-clock time and enforces the "
                     "per-instance timeout (the `timeout` column in `instances.csv`, if the "
                     "benchmark set defines one; otherwise the run is uncapped). A nonzero exit from "

@@ -10,8 +10,8 @@
 # ${ROOT_URL}/update/${task_id}/success|failure.
 #
 # Params (env, from the step handler): benchmark_ip task_id benchmark_id benchmark_name
-# version script_dir repository hash tool_env. ROOT_URL comes from the backend
-# environment. NODE_SSH_KEY locates the node key.
+# version script_dir repository hash tool_env run_networks (the evaluation mode). ROOT_URL
+# comes from the backend environment. NODE_SSH_KEY locates the node key.
 set -eu
 
 ssh_key="${NODE_SSH_KEY:-$HOME/.ssh/comp.pem}"
@@ -62,12 +62,14 @@ export BENCHMARKS_DIR=/home/ubuntu/benchmarks_repo
 # was pasted in, since it is part of what the numbers below mean.
 ${tool_env:-}
 log_info 'tool environment: ${tool_env:-(none)}'
+log_info 'evaluation mode: ${run_networks:-all}'
 results_file=/home/ubuntu/logs/results_${benchmark_id}.csv
 if python3 /home/ubuntu/harness.py benchmark \
     /home/ubuntu/benchmarks_repo \"${benchmark_name}\" \
     /home/ubuntu/tool/${script_dir} \
     \${results_file} \
-    \"${version}\"; then
+    \"${version}\" \
+    \"${run_networks:-all}\"; then
     lines=\$(wc -l < \${results_file} 2>/dev/null || echo 1)
     count=\$(( lines > 0 ? lines - 1 : 0 ))
     log_superstage \"End — finished \${count} instance(s); results in \${results_file}\"
