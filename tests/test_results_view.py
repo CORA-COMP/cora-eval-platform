@@ -200,9 +200,10 @@ def test_a_running_benchmark_is_measured_from_its_partial_csv():
     assert rows[("zonotope", "minkSum-5d-cpu")]["time"] == 0.20
 
 
-def test_the_data_endpoint_needs_a_logged_in_user(client):
+def test_the_results_are_public(client):
     _fixture()
-    assert client.get("/api/cora/results/data/").status_code == 403
+    payload = client.get("/api/cora/results/data/").json()
+    assert payload["tools"] == ["CORA"]
 
 
 def test_the_data_endpoint_serves_the_payload(client):
