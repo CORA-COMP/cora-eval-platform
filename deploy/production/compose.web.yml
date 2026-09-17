@@ -35,7 +35,7 @@ services:
       sh -c "apk add --no-cache openssh-client >/dev/null &&
              install -d -m 700 /root/.ssh && cp /etc/cora-ssh/* /root/.ssh/ && chmod 600 /root/.ssh/* &&
              exec ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3
-                  -L 0.0.0.0:9001:127.0.0.1:9001 cora-worker"
+             -L 0.0.0.0:9001:127.0.0.1:9001 cora-worker"
 
   backend:
     build:
@@ -86,7 +86,7 @@ services:
              python deploy/manage.py collectstatic --noinput -v 0 &&
              python deploy/manage.py init_settings &&
              exec gunicorn --chdir /app --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 120
-                  comp_eval_platform.wsgi:application"
+             comp_eval_platform.wsgi:application"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/competition/"]
       interval: 15s
