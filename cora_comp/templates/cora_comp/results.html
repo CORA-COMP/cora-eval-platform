@@ -194,6 +194,8 @@ const CORA_COLORS = [
 ];
 
 const FINISHED = 'finished';
+//: The Tools table's verdict columns, in reading order.
+const VERDICTS = [FINISHED, 'unsupported', 'error', 'timeout'];
 //: Floor of the log axis. The first point of a series is one instance minus the overhead
 //: baseline, which can round to zero; without a floor the axis has no bottom.
 const Y_FLOOR = 1e-3;
@@ -517,28 +519,44 @@ function liveTag(tool) {
     ? `<span class="live" style="${pulsePhase()}" title="run in flight">Live</span>` : '';
 }
 
+/** Per tool, how many of the selected instances ended in each verdict; the harness's
+ *  prepare_failed, like anything unrecognized, counts as an error. */
+function verdictCounts() {
+  const byTool = new Map();
+  for (const row of state.data.measurements) {
+    if (!matches(row)) continue;
+    if (!byTool.has(row.tool)) byTool.set(row.tool, Object.fromEntries(VERDICTS.map((v) => [v, 0])));
+    byTool.get(row.tool)[VERDICTS.includes(row.result) ? row.result : 'error'] += 1;
+  }
+  return byTool;
+}
+
 function renderSummary(series) {
   const host = el('summary');
-  const measured = new Set(series.map((s) => s.tool));
-  // A tool that has just started has no series yet; list it anyway, so the run is visible
+  const counts = verdictCounts();
+  const bySeries = new Map(series.map((s) => [s.tool, s]));
+  // A tool that has just started has no results yet; list it anyway, so the run is visible
   // from its first second rather than from its first result.
-  const waiting = state.data.tools.filter((t) => !measured.has(t) && isLive(t));
-  if (!series.length && !waiting.length) {
+  const tools = state.data.tools.filter((t) => counts.has(t) || isLive(t));
+  if (!tools.length) {
     host.innerHTML = '<p class="empty">Nothing measured yet.</p>';
     return;
   }
-  const rows = series.map((s) => `<tr>
-      <td><span class="swatch" style="background:${s.color}"></span>${esc(s.tool)}${liveTag(s.tool)}</td>
-      <td class="num">${s.points.length}</td>
-      <td class="num">${fmtTime(s.total)}</td>
-      <td class="num">${fmtTime(s.base.run)}</td>
-      <td class="num">${fmtTime(s.base.prepare)}</td>
-    </tr>`).join('') + waiting.map((tool) => `<tr>
+  // Time only covers finished instances, so a tool with none has no time to show.
+  const rows = tools.map((tool) => {
+    const c = counts.get(tool);
+    const s = bySeries.get(tool);
+    return `<tr>
       <td><span class="swatch" style="background:${colorOf(tool)}"></span>${esc(tool)}${liveTag(tool)}</td>
-      <td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
-    </tr>`).join('');
+      ${VERDICTS.map((v) => `<td class="num">${c ? c[v] : 0}</td>`).join('')}
+      <td class="num">${s ? fmtTime(s.total) : '—'}</td>
+      <td class="num">${s ? fmtTime(s.base.run) : '—'}</td>
+      <td class="num">${s ? fmtTime(s.base.prepare) : '—'}</td>
+    </tr>`;
+  }).join('');
   host.innerHTML = `<table><thead><tr>
-      <th>Tool</th><th class="num">Finished</th><th class="num">Cumulative time (s)</th>
+      <th>Tool</th>${VERDICTS.map((v) => `<th class="num">${esc(v[0].toUpperCase() + v.slice(1))}</th>`).join('')}
+      <th class="num">Time, finished (s)</th>
       <th class="num">Overhead (run, s)</th><th class="num">Overhead (prepare, s)</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
