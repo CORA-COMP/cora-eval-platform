@@ -42,8 +42,10 @@ ssh-keyscan tars.cps.cit.tum.de > ssh/known_hosts
 cd ../.. && docker-compose -p cora-comp -f deploy/production/compose.web.yml up -d --build
 ```
 
-The site is served on `WEB_PORT` (5175); until the public name resolves, set `ROOT_URL`
-to `http://cpsvm5.cit.tum.de:5175`. For the public name, add a site to the host
+The site is served on `WEB_PORT` (5175), over plain HTTP. Browsers only open it over
+HTTPS: tum.de's HSTS covers every subdomain. Until the public name resolves, the host proxy
+serves the site as `https://cpsvm5.cit.tum.de`, and `ROOT_URL` is
+`http://cpsvm5.cit.tum.de:5175` (job containers don't apply HSTS). For the public name, add a site to the host
 proxy's Caddyfile (`/opt/arch/submission-system/docker/prod/caddyfile`) and reload it
 (`docker exec arch-caddy caddy reload --config /etc/caddy/Caddyfile`):
 
