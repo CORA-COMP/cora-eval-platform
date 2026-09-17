@@ -76,24 +76,56 @@ def test_build_steps_graph():
 
 def test_build_steps_runs_group_by_group():
     """Benchmarks run in the order the catalog is shown in: the interface's own
-    overhead, then the set representations, then their batched twins."""
+    overhead, the set representations, their batched twins, then the unassigned."""
     from comp_eval_platform.competitions import get_competition
     from comp_eval_platform.core.models import Benchmark, Task, Tool
 
     from cora_comp import kinds
 
     cat = _category()
-    names = ["zonotope-batched", "zonotope", "test", "interval"]
-    made = {n: Benchmark.objects.create(owner=_user(), category=cat, name=n, published=True)
-            for n in names}
+    groups = {"polytope": "default", "zonotope-batched": "sets-batched",
+              "zonotope": "sets", "test": "test", "interval": "sets"}
+    made = {n: Benchmark.objects.create(owner=_user(), category=cat, name=n, group=g,
+                                        published=True)
+            for n, g in groups.items()}
     tool = Tool.objects.create(owner=_user(), category=cat, name="cora", base_image="cora")
     task = Task.objects.create(owner=tool.owner, tool=tool)
     get_competition().build_steps(task)
 
     run_steps = task.step_set.filter(kind=kinds.RUN_BENCHMARK).order_by("order")
     assert [s.payload["benchmark_id"] for s in run_steps] == [
-        str(made[n].id) for n in ["test", "interval", "zonotope", "zonotope-batched"]
+        str(made[n].id) for n in ["test", "interval", "zonotope", "zonotope-batched", "polytope"]
     ]
+
+
+def test_benchmark_groups_include_cores_default():
+    """Core puts every new benchmark in ``default``, so the variant must accept it."""
+    from comp_eval_platform.competitions import get_competition
+
+    comp = get_competition()
+    assert comp.benchmark_groups() == ("test", "sets", "sets-batched", "default")
+    assert comp.validate_benchmark_group("default") == "default"
+
+
+def test_a_group_scoreboard_counts_only_that_groups_benchmarks():
+    from comp_eval_platform.competitions import get_competition
+    from comp_eval_platform.core.models import Benchmark, Result, Task, Tool, Track
+
+    cat = _category()
+    tool = Tool.objects.create(owner=_user(), category=cat, name="cora", base_image="cora")
+    task = Task.objects.create(owner=tool.owner, tool=tool)
+    track = Track.objects.create(name="main")
+    for name, group, time in [("test", "test", 1.0), ("zonotope", "sets", 2.0),
+                              ("interval", "sets", 4.0)]:
+        b = Benchmark.objects.create(category=cat, name=name, group=group, published=True)
+        track.benchmarks.add(b)
+        Result.objects.create(task=task, tool=tool, benchmark=b, category=cat,
+                              result="finished", time=time)
+
+    comp = get_competition()
+    assert comp.score(track).rows == [{"tool": "cora", "finished": 3, "time": 7.0}]
+    assert comp.score_group(track, "sets").rows == [{"tool": "cora", "finished": 2, "time": 6.0}]
+    assert comp.score_group(track, "sets-batched").rows == []
 
 
 def test_install_runs_as_the_user_that_runs_the_instances():

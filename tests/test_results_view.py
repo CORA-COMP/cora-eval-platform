@@ -62,15 +62,19 @@ def test_facet_options_come_from_the_loaded_catalog():
 
 
 def test_benchmark_selector_is_grouped():
-    """The benchmark selector shows the catalog's own split, in display order, and
-    skips groups nothing was loaded into."""
+    """The benchmark selector shows each benchmark's assigned group, in display order,
+    and skips groups nothing was assigned to."""
+    from comp_eval_platform.core.models import Benchmark
     from cora_comp.plots import facet_options
 
     _fixture()
+    Benchmark.objects.filter(name="test").update(group="test")
+    Benchmark.objects.filter(name="zonotope").update(group="sets")
     facet = next(f for f in facet_options() if f["key"] == "benchmark")
     assert facet["groups"] == [
         {"label": "test", "options": ["test"]},
-        {"label": "sets", "options": ["interval", "zonotope"]},
+        {"label": "sets", "options": ["zonotope"]},
+        {"label": "default", "options": ["interval"]},
     ]
 
 

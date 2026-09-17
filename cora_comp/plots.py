@@ -67,7 +67,7 @@ def facet_options() -> list:
     any instance of any benchmark, sorted. The view prepends "all".
 
     The benchmark facet also carries ``groups``, so the selector shows the catalog's
-    own split (test / sets / their batched twins) rather than one flat list.
+    own split (each benchmark's ``Benchmark.group``) rather than one flat list.
     """
     from comp_eval_platform.core.models import Instance
 
@@ -89,10 +89,15 @@ def facet_options() -> list:
 def _benchmark_groups(names) -> list:
     """``[{"label", "options"}]`` over the given benchmark names, in group order,
     skipping groups the catalog has nothing in."""
-    from .category import GROUPS, group_for
+    from comp_eval_platform.core.models import Benchmark
 
+    from .category import DEFAULT_GROUP, GROUPS
+
+    group_of = dict(Benchmark.objects.filter(name__in=names).values_list("name", "group"))
+    # A group this variant no longer declares still has to land somewhere selectable.
+    group_of = {n: g if g in GROUPS else DEFAULT_GROUP for n, g in group_of.items()}
     grouped = [
-        {"label": label, "options": [n for n in names if group_for(n) == label]}
+        {"label": label, "options": [n for n in names if group_of.get(n) == label]}
         for label in GROUPS
     ]
     return [g for g in grouped if g["options"]]

@@ -70,17 +70,25 @@ def test_parse_rejects_ragged_rows():
         parse_instances_csv("benchmark;instance\nzonotope;x;extra\n")
 
 
-def test_load_assigns_the_display_group():
-    """The group is derived from the benchmark's name, so the catalog alone decides it."""
+def test_a_reload_keeps_the_admin_assigned_group():
+    """A new benchmark waits in core's default group; the group an admin then assigns
+    survives reloading the catalog."""
+    from comp_eval_platform.core.models import Benchmark
+
     from cora_comp.benchmarks import load_benchmarks_from_csv
 
-    csv_text = BENCHMARKS_CSV + 'zonotope-batched;minkSum-1d-b8;{"dim": 1}\ntest;startup-1d;{}\n'
+    owner = _user()
     benchmarks = load_benchmarks_from_csv(
-        repository="https://x/r", ref="abc123", owner=_user(), csv_text=csv_text,
+        repository="https://x/r", ref="v1", owner=owner, csv_text=BENCHMARKS_CSV,
     )
-    assert {b.name: b.extra["group"] for b in benchmarks} == {
-        "interval": "sets", "zonotope": "sets",
-        "zonotope-batched": "sets-batched", "test": "test",
+    assert {b.name: b.group for b in benchmarks} == {"interval": "default", "zonotope": "default"}
+    assert all("group" not in b.extra for b in benchmarks)
+
+    Benchmark.objects.filter(name="zonotope").update(group="sets")
+    load_benchmarks_from_csv(repository="https://x/r", ref="v2", owner=owner,
+                             csv_text=BENCHMARKS_CSV)
+    assert dict(Benchmark.objects.values_list("name", "group")) == {
+        "interval": "default", "zonotope": "sets",
     }
 
 

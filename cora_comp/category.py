@@ -8,22 +8,21 @@ column. Keeping the row (rather than switching the variant to core's "one benchm
 per submission" shape) is what lets one submission load a whole ``instances.csv``.
 
 Within the category the catalog splits into groups — the interface's own overhead,
-the set representations, and their batched twins. A group is a display axis only
-(core's ``Benchmark.extra["group"]``), derived from the benchmark's name, so the
-catalog alone decides it and no submitter types it.
+the set representations, and their batched twins. The names and their order are
+declared here; which benchmark sits in which group is core's ``Benchmark.group``,
+assigned by an admin. A freshly loaded benchmark waits in core's ``default`` group.
 """
 
 #: The one category every CORA-COMP benchmark and tool belongs to.
 CATEGORY_NAME = "contSet"
 
-#: The groups the category's benchmarks are shown in, in display order.
+#: The groups the category's benchmarks are shown and run in, in that order. Core
+#: places every new benchmark in ``default``; it comes last as the not-yet-assigned rest.
 TEST_GROUP = "test"
 SET_GROUP = "sets"
 BATCHED_GROUP = "sets-batched"
-GROUPS = [TEST_GROUP, SET_GROUP, BATCHED_GROUP]
-
-#: Suffix that marks a benchmark as the batched twin of a set representation.
-BATCHED_SUFFIX = "-batched"
+DEFAULT_GROUP = "default"
+GROUPS = (TEST_GROUP, SET_GROUP, BATCHED_GROUP, DEFAULT_GROUP)
 
 #: Normalized result columns the UI shows for it (presentation hint). A tool may
 #: self-report further columns; those ride along per instance as ``Result.extra``.
@@ -39,14 +38,3 @@ def ensure_category():
     )
     return category
 
-
-def group_for(benchmark_name: str) -> str:
-    """The group a benchmark is shown in, from its name."""
-    if benchmark_name == TEST_GROUP:
-        return TEST_GROUP
-    return BATCHED_GROUP if benchmark_name.endswith(BATCHED_SUFFIX) else SET_GROUP
-
-
-def group_order(benchmark_name: str) -> int:
-    """Sort key placing a benchmark's group in display order."""
-    return GROUPS.index(group_for(benchmark_name))
