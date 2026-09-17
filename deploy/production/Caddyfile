@@ -1,0 +1,23 @@
+{
+	# TLS ends at the host's shared proxy; keep its X-Forwarded-* headers.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	encode gzip
+
+	# Django serves the API, the node callbacks, and its own static files. Its admin is
+	# not routed: /admin is the frontend's admin area.
+	@backend path /api/* /update/* /static/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

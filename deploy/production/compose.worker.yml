@@ -1,0 +1,43 @@
+# Production worker: the remote_docker worker service, which starts one container per
+# submission on this machine's Docker. The website reaches it through an SSH tunnel.
+#
+#   docker compose -p cora-comp -f deploy/production/compose.worker.yml up -d --build
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../core:/core
+      - ../..:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      # Loopback only: the service has no authentication and controls Docker.
+      - "127.0.0.1:${WORKER_PORT:-9001}:9001"
+    environment:
+      DJANGO_SETTINGS_MODULE: deploy.settings
+      ACTIVE_COMPETITION: cora
+      # The job containers' bootstrap script is looked up here.
+      SCRIPT_ROOT: /app/cora_comp
+      COMP_DOCKER_NETWORK: cora-comp-jobs
+      COMP_DOCKER_NAME_PREFIX: cora
+      # "all" passes the host's GPUs into job containers (needs the NVIDIA runtime).
+      COMP_DOCKER_GPU: "${COMP_DOCKER_GPU:-}"
+    command: >
+      sh -c "pip install -q -e /core -e . &&
+             exec python deploy/manage.py worker_service --host 0.0.0.0 --port 9001"
+    # Joining the job network is what makes compose create it.
+    networks:
+      - default
+      - jobs
+
+networks:
+  # A fixed name and subnet, so the website's SSH config routes exactly this range
+  # through this machine.
+  jobs:
+    name: cora-comp-jobs
+    ipam:
+      config:
+        - subnet: ${JOBS_SUBNET:-172.29.0.0/16}

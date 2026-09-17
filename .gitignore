@@ -36,3 +36,6 @@ htmlcov/
 .DS_Store
 desktop.ini
 Thumbs.db
+
+# Production deploy secrets
+/deploy/production/ssh/
