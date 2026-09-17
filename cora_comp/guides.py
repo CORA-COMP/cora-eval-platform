@@ -17,8 +17,8 @@ finished,0.30,0.60"""
 
 _INSTANCES_CSV = """benchmark;instance;params
 interval;generateRandom-1d-cpu;{"set": "interval", "operation": "generateRandom", "dim": 1, "device": "cpu", "repetition": 100}
-zonotope;matMul-500d-gpu;{"set": "zonotope", "operation": "matMul", "dim": 500, "device": "gpu", "repetition": 100}
-zonotope-batched;minkSum-1000d-b10-cpu;{"set": "zonotope", "operation": "minkSum", "dim": 1000, "device": "cpu", "repetition": 100, "batch_size": 10}"""
+zonotope;matMul-500d-gpu;{"set": "zonotope", "operation": "matMul", "dim": 500, "generators": 1000, "device": "gpu", "repetition": 100}
+zonotope-batched;minkSum-1000d-b10-cpu;{"set": "zonotope", "operation": "minkSum", "dim": 1000, "generators": 2000, "device": "cpu", "repetition": 100, "batch_size": 10}"""
 
 
 def toolkit_guide() -> Guide:
@@ -103,10 +103,11 @@ def toolkit_guide() -> Guide:
                         "is always the last argument) and writes its verdict to `<result-file>`.",
                     ]},
                     {"type": "note", "text":
-                        "Only `run_instance.sh` is timed, so the split between the two decides what "
-                        "gets measured: generate the operation's inputs in `prepare_instance.sh` "
-                        "and write them to disk, then read them back once in `run_instance.sh` and "
-                        "perform the operation `params.repetition` times, and nothing else."},
+                        "Only `run_instance.sh` is timed, and it runs the whole instance: generate "
+                        "the operation's inputs, move them to the device, then perform the "
+                        "operation `params.repetition` times. `prepare_instance.sh` is for untimed "
+                        "setup that is not instance data, such as starting a daemon or initializing "
+                        "the GPU; it may do nothing."},
                     {"type": "note", "text":
                         "The arguments are the interface version followed by the instance's "
                         "`instances.csv` columns, in file order — so a column added to the catalog "
