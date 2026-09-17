@@ -74,6 +74,25 @@ def test_build_steps_graph():
     ]
 
 
+@pytest.mark.parametrize("mode, expected", [(None, "all"), ("first", "first"),
+                                            ("random10", "random10")])
+def test_build_steps_passes_the_evaluation_mode(mode, expected):
+    from comp_eval_platform.competitions import get_competition
+    from comp_eval_platform.core.models import Benchmark, Task, Tool
+
+    from cora_comp import kinds
+
+    cat = _category()
+    extra = {"run_networks": mode} if mode else {}
+    tool = Tool.objects.create(owner=_user(), category=cat, name="cora", extra=extra)
+    Benchmark.objects.create(owner=_user(), category=cat, name="ACC", published=True)
+    task = Task.objects.create(owner=tool.owner, tool=tool)
+    get_competition().build_steps(task)
+
+    (run,) = task.step_set.filter(kind=kinds.RUN_BENCHMARK)
+    assert run.payload["run_networks"] == expected
+
+
 def test_build_steps_runs_group_by_group():
     """Benchmarks run in the order the catalog is shown in: the interface's own
     overhead, the set representations, their batched twins, then the unassigned."""

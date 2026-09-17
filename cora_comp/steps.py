@@ -175,6 +175,7 @@ class CoraRunBenchmarkHandler(StepHandler):
             "repository": b.repository,
             "hash": b.hash or "",
             "tool_env": _tool_env(tool),
+            "run_networks": self.step.payload.get("run_networks", "all"),
         })
 
     def while_active(self):

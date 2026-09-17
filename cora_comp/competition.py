@@ -97,9 +97,12 @@ class CoraCompetition(Competition):
             selected = task.tool.extra.get("benchmarks")
             if selected:
                 benchmarks = benchmarks.filter(id__in=selected)
+            # The form's evaluation mode: every instance, or a test subset of each benchmark.
+            run_networks = task.tool.extra.get("run_networks") or "all"
             # Run group by group, so the pipeline reads in the order the catalog is shown in.
             for b in self.order_benchmarks(benchmarks):
-                steps.append(add(kinds.RUN_BENCHMARK, benchmark_id=str(b.id)))
+                steps.append(add(kinds.RUN_BENCHMARK, benchmark_id=str(b.id),
+                                 run_networks=run_networks))
             steps.append(add(SHUTDOWN_KIND))
         else:
             # A benchmark submission loads the whole catalog from one central repo. The
