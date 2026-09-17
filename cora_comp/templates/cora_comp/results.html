@@ -104,6 +104,13 @@
   /* The head of a curve whose run is still going — the same beat as the Live dot, in the
      tool's own color, so the point that is about to move is the one that blinks. */
   .live-head { animation: pulse 1.2s ease-in-out infinite; }
+  /* Placeholders until the first payload arrives, like MUI's Skeleton on the other pages. */
+  .sk { display: block; background: rgba(0, 0, 0, .11); border-radius: 4px; animation: sk-pulse 2s ease-in-out .5s infinite; }
+  .sk-text { height: .9em; margin: 6px 0; }
+  .sk-rows { padding-top: 4px; }
+  .sk-rows .sk-text { margin: 17px 0; }
+  .sk-plot { aspect-ratio: 900 / 480; border-radius: 8px; }
+  @keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
   #plot { position: relative; }
   #plot svg { width: 100%; height: auto; display: block; }
   .hover-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
@@ -158,7 +165,7 @@
   <div class="card controls">
     <!-- One selector per facet the payload carries; display:contents keeps them in the
          controls row rather than making the wrapper a flex item of its own. -->
-    <div id="facets" style="display:contents"></div>
+    <div id="facets" style="display:contents"><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:200px;height:38px;border-radius:10px"></span></div></div>
     <div class="toggle">
       <input type="checkbox" id="subtract-overhead" checked>
       <label for="subtract-overhead" style="margin:0">subtract overhead</label>
@@ -175,12 +182,12 @@
 
   <div class="card">
     <h2>Tools</h2>
-    <div id="summary"></div>
+    <div id="summary"><div class="sk-rows"><span class="sk sk-text" style="width:100%"></span><span class="sk sk-text" style="width:92%"></span><span class="sk sk-text" style="width:96%"></span></div></div>
   </div>
 
   <div class="card">
     <h2>Cactus plot</h2>
-    <div id="plot"></div>
+    <div id="plot"><span class="sk sk-plot"></span></div>
     <p class="hint" id="plot-hint"></p>
   </div>
 
@@ -188,8 +195,8 @@
     <h2>Detailed results</h2>
     <!-- Built once and left alone by redraws, so a live poll cannot steal the focus out
          of the instance box mid-word. -->
-    <div class="filters" id="detail-filters"></div>
-    <div class="scroll"><div id="details"></div></div>
+    <div class="filters" id="detail-filters"><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:170px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:170px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:170px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:170px;height:38px;border-radius:10px"></span></div><div class="control"><span class="sk sk-text" style="width:64px"></span><span class="sk" style="width:170px;height:38px;border-radius:10px"></span></div></div>
+    <div class="scroll"><div id="details"><div class="sk-rows"><span class="sk sk-text" style="width:100%"></span><span class="sk sk-text" style="width:94%"></span><span class="sk sk-text" style="width:97%"></span><span class="sk sk-text" style="width:91%"></span><span class="sk sk-text" style="width:100%"></span><span class="sk sk-text" style="width:94%"></span><span class="sk sk-text" style="width:97%"></span><span class="sk sk-text" style="width:91%"></span></div></div></div>
     <div class="pager" id="detail-pager"></div>
   </div>
 </main>
@@ -837,15 +844,21 @@ async function poll() {
   schedulePoll();
 }
 
+/** Swaps the loading placeholders for a message when no payload is coming. */
+function showUnavailable(message) {
+  for (const id of ['facets', 'summary', 'details', 'detail-filters']) el(id).innerHTML = '';
+  el('plot').innerHTML = `<p class="empty">${message}</p>`;
+}
+
 async function boot() {
   await bootChrome();
   if (document.body.dataset.authenticated !== '1') {
-    el('plot').innerHTML = '<p class="empty">Log in to view results — <a href="/login">log in</a>.</p>';
+    showUnavailable('Log in to view results — <a href="/login">log in</a>.');
     return;
   }
   const res = await fetch('/api/cora/results/data/', { credentials: 'same-origin' });
   if (!res.ok) {
-    el('plot').innerHTML = '<p class="empty">Could not load results.</p>';
+    showUnavailable('Could not load results.');
     return;
   }
   state.data = await res.json();
