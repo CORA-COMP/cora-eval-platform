@@ -12,7 +12,7 @@
 	# not routed: /admin is the frontend's admin area.
 	@backend path /api/* /update/* /static/*
 	handle @backend {
-		reverse_proxy backend:8000
+		reverse_proxy cora-backend:8000
 	}
 
 	handle {
