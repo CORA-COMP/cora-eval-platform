@@ -21,6 +21,7 @@ version. A ``timeout`` column caps that instance; absent/blank/``inf`` = no cap.
 would otherwise force quoting); ``results.csv`` stays a plain comma CSV, as does the small
 file a tool writes its verdict to.
 """
+import contextlib
 import csv
 import json
 import os
@@ -216,7 +217,10 @@ def run_instance(tool_dir, version, values, timeout, show_output=False):
         return {"prepare_time": round(prep_elapsed, 4), "result": result,
                 "time": round(run_elapsed, 4), "extra": extra}
     finally:
-        os.unlink(res_path)
+        # The results file is the tool's to write, so it may delete and recreate it —
+        # and then be killed on timeout with the file gone.
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(res_path)
 
 
 def _read_instances(path):

@@ -125,6 +125,25 @@ def test_optional_timeout_column_caps_the_run(tmp_path):
     assert float(row["time"]) < 2.0  # killed at the cap, not after the full sleep
 
 
+def test_a_timeout_after_the_tool_removed_the_results_file(tmp_path):
+    """A tool may clear the results file before writing it; a timeout then leaves no file
+    at all, and the run must carry on to the next instance."""
+    clearing_tool = (
+        "#!/bin/sh\n"
+        'for a in "$@"; do last="$a"; done\n'
+        'rm -f "$last"\n'
+        '[ "$3" = slow ] && sleep 2\n'
+        'printf "result\\nfinished\\n" > "$last"\n'
+    )
+    repo = _repo(tmp_path / "repo",
+                 "benchmark;instance;timeout\nACC;slow;0.5\nACC;quick;0.5\n")
+    tool = _tool(tmp_path / "tool", clearing_tool)
+    out = str(tmp_path / "results.csv")
+
+    rows = _run_benchmark(repo, "ACC", tool, out)
+    assert [r["result"] for r in rows] == ["timeout", "finished"]
+
+
 def test_no_timeout_column_runs_uncapped(tmp_path):
     repo = _repo(tmp_path / "repo", "benchmark;instance\nACC;a1\n")
     tool = _tool(tmp_path / "tool", REPORTING_TOOL)
