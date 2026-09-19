@@ -225,6 +225,14 @@ def test_the_page_shows_placeholders_until_the_data_arrives(client):
         assert f'{host}><div class="sk-rows">' in html or f'{host}><span class="sk' in html
 
 
+def test_the_page_carries_a_breadcrumb_trail(client):
+    """Every other page has one, and this is where an anonymous visitor lands first."""
+    html = client.get("/api/cora/results/").content.decode()
+    assert 'class="crumbs"' in html
+    assert '<a href="/" aria-label="Home">' in html
+    assert '<span class="here">Results</span>' in html
+
+
 def test_the_page_is_rendered_with_the_competitions_branding(client):
     """The first paint must already be CORA-COMP's: a page that starts from the generic
     look and restyles itself after a fetch flashes the wrong theme on every load."""
