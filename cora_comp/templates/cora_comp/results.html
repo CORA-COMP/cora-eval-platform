@@ -622,10 +622,18 @@ function renderPlot(series) {
       if (p) marks.push(`<circle cx="${px(p.x)}" cy="${py(p.y)}" r="4.5" fill="${s.color}" stroke="var(--paper)" stroke-width="1.5"/>`);
     }
     layer.innerHTML = marks.join('');
-    // Listed the way the curves stack at this rank, so the eye can go straight from a
-    // line to its row: slowest at the top, and the tools that never reach it last.
-    const stacked = ({ p }) => (p ? -p.y : Infinity);
-    const rows = at.slice().sort((a, b) => stacked(a) - stacked(b))
+    // Stacked the way the curves are, so the eye goes from a line straight to its row and
+    // the best tool is at the bottom of both. Ordering by the total is what does it: the
+    // total is the curve's height here. A tool whose run ends before this rank is above
+    // every curve that reaches it — it never got this far — and those are ranked among
+    // themselves the way the plot ranks everything: instances finished first, then the
+    // total they cost.
+    const byStack = (a, b) => {
+      if (a.p && b.p) return b.p.y - a.p.y;
+      if (a.p || b.p) return a.p ? 1 : -1;
+      return a.s.points.length - b.s.points.length || b.s.total - a.s.total;
+    };
+    const rows = at.slice().sort(byStack)
       .map(({ s, p }) => `<tr><td><span class="sw" style="background:${s.color}"></span>${esc(s.tool)}</td>`
         + (p
           ? `<td class="num">${fmtHover(p.y)} s</td><td class="num">+${fmtHover(p.cost)} s</td><td class="inst">${esc(p.label)}</td>`
