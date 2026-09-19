@@ -143,11 +143,17 @@
   .plot-tip td { padding: 2px 6px; }
   .plot-tip td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .plot-tip .inst { color: var(--muted); }
+  .plot-tip td.rank { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
   .plot-tip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
   .grid { stroke: var(--line); stroke-width: 1; }
   .axis { stroke: #9ca3af; stroke-width: 1; }
   .tick { fill: var(--muted); font-size: 11px; }
   .axis-label { fill: var(--muted); font-size: 12px; }
+  /* Faint on purpose: an annotation pointing at the corner, not something to read first. */
+  .better { opacity: .5; }
+  .better line { stroke: var(--muted); stroke-width: 1.2; }
+  .better text { fill: var(--muted); font-size: 11px; font-style: italic; }
+  .better-head { fill: var(--muted); }
   .empty { color: var(--muted); padding: 32px 0; text-align: center; }
 
   footer { margin-top: 48px; padding: 24px 0; text-align: center; background: var(--paper); border-top: 1px solid var(--line); }
@@ -584,6 +590,17 @@ function renderPlot(series) {
   parts.push(`<text class="axis-label" x="${(M.left + W - M.right) / 2}" y="${H - 10}" text-anchor="middle">instances finished (sorted by cost)</text>`);
   parts.push(`<text class="axis-label" transform="translate(16 ${(M.top + H - M.bottom) / 2}) rotate(-90)" text-anchor="middle">cumulative time (s${log ? ', log' : ''})</text>`);
 
+  // The ideal tool sits in the bottom-right corner: everything finished, for almost no
+  // time. Cumulative curves only rise, so that corner is always empty — an arrow into it
+  // says which way is good without covering any data.
+  const gx = W - M.right, gy = H - M.bottom;
+  parts.push('<defs><marker id="better-head" viewBox="0 0 8 8" refX="7" refY="4" '
+    + 'markerWidth="5" markerHeight="5" orient="auto"><path class="better-head" d="M0 0 L8 4 L0 8 Z"/>'
+    + '</marker></defs>');
+  parts.push(`<g class="better" aria-hidden="true">`
+    + `<line x1="${gx - 60}" y1="${gy - 48}" x2="${gx - 14}" y2="${gy - 13}" marker-end="url(#better-head)"/>`
+    + `<text x="${gx - 64}" y="${gy - 50}" text-anchor="end">better</text></g>`);
+
   for (const s of series) {
     const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
     parts.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round"/>`);
@@ -633,15 +650,19 @@ function renderPlot(series) {
       if (a.p || b.p) return a.p ? 1 : -1;
       return a.s.points.length - b.s.points.length || b.s.total - a.s.total;
     };
-    const rows = at.slice().sort(byStack)
-      .map(({ s, p }) => `<tr><td><span class="sw" style="background:${s.color}"></span>${esc(s.tool)}</td>`
+    // Numbered from the bottom, so the leader at this rank is 1 however many tools there
+    // are and whichever of them the filters left in.
+    const ranked = at.slice().sort(byStack);
+    const rows = ranked
+      .map(({ s, p }, i) => `<tr><td class="rank">${ranked.length - i}</td>`
+        + `<td><span class="sw" style="background:${s.color}"></span>${esc(s.tool)}</td>`
         + (p
           ? `<td class="num">${fmtHover(p.y)} s</td><td class="num">+${fmtHover(p.cost)} s</td><td class="inst">${esc(p.label)}</td>`
           : `<td class="num">—</td><td class="num"></td><td class="inst">finished only ${s.points.length}</td>`)
         + '</tr>')
       .join('');
     tip.innerHTML = `<div class="head">Instance #${k} (sorted by cost)</div>`
-      + `<table><tr class="inst"><td></td><td class="num">total</td><td class="num">this one</td><td></td></tr>${rows}</table>`;
+      + `<table><tr class="inst"><td></td><td></td><td class="num">total</td><td class="num">this one</td><td></td></tr>${rows}</table>`;
     tip.hidden = false;
     // Positioned in CSS pixels of the rendered plot, which is scaled from the viewBox.
     const scale = svg.getBoundingClientRect().width / W;
