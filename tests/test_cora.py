@@ -151,7 +151,7 @@ def test_a_group_scoreboard_counts_only_that_groups_benchmarks():
 
 def test_install_runs_as_the_user_that_runs_the_instances():
     """MATLAB's preferences folder is written at install time and must stay writable
-    when instances run, so install must not run as root."""
+    when instances run, so install must not run as root by default."""
     from comp_eval_platform.competitions import get_competition
     from comp_eval_platform.core.models import Task, Tool
 
@@ -163,6 +163,23 @@ def test_install_runs_as_the_user_that_runs_the_instances():
     get_competition().build_steps(task)
 
     assert task.step_set.get(kind=kinds.INSTALL).run_as_root is False
+
+
+def test_install_runs_as_root_when_the_tool_asked_for_it():
+    """The submission form's 'run installation script as root' has to reach the step, or
+    a tool whose install needs a package manager cannot be submitted at all."""
+    from comp_eval_platform.competitions import get_competition
+    from comp_eval_platform.core.models import Task, Tool
+
+    from cora_comp import kinds
+
+    tool = Tool.objects.create(owner=_user(), category=_category(), name="cora",
+                               base_image="cora:latest",
+                               extra={"run_installation_script_as_root": True})
+    task = Task.objects.create(owner=tool.owner, tool=tool)
+    get_competition().build_steps(task)
+
+    assert task.step_set.get(kind=kinds.INSTALL).run_as_root is True
 
 
 def test_build_steps_respects_selected_benchmarks():
