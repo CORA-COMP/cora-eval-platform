@@ -97,6 +97,8 @@
     clip-path: inset(50%); white-space: nowrap;
   }
   th.eye-col, td.eye-col { width: 1%; padding-right: 0; }
+  th.rank, td.rank { width: 1%; text-align: right; color: var(--muted);
+    font-variant-numeric: tabular-nums; padding-left: 6px; padding-right: 2px; }
   .eye {
     display: block; padding: 2px; border: 0; background: none; cursor: pointer;
     color: var(--muted); line-height: 0; border-radius: 6px;
@@ -752,14 +754,23 @@ function renderSummary(series) {
     host.innerHTML = '<p class="empty">Nothing measured yet.</p>';
     return;
   }
+  // Ranked as the plot ranks tools — instances finished first, then what they cost — but
+  // listed best first, where the plot's legend has to read bottom-up to follow the curves.
+  // A tool with nothing finished yet has nothing to rank on and goes last.
+  tools.sort((a, b) => {
+    const x = bySeries.get(a), y = bySeries.get(b);
+    if (!x || !y) return x ? -1 : y ? 1 : a.localeCompare(b);
+    return y.points.length - x.points.length || x.total - y.total;
+  });
   // Time only covers finished instances, so a tool with none has no time to show.
-  const rows = tools.map((tool) => {
+  const rows = tools.map((tool, i) => {
     const c = counts.get(tool);
     const s = bySeries.get(tool);
     const off = state.hidden.has(tool);
     return `<tr${off ? ' class="is-hidden"' : ''}>
       <td class="eye-col"><button class="eye" data-tool="${esc(tool)}" aria-pressed="${off}"
         title="${off ? 'Show in the plot' : 'Hide from the plot'}">${eyeIcon(off)}</button></td>
+      <td class="rank">${s ? i + 1 : '—'}</td>
       <td><span class="swatch" style="background:${colorOf(tool)}"></span>${esc(tool)}${liveTag(tool)}</td>
       ${VERDICTS.map((v) => `<td class="num">${c ? c[v] : 0}</td>`).join('')}
       <td class="num">${s ? fmtTime(s.total) : '—'}</td>
@@ -769,6 +780,7 @@ function renderSummary(series) {
   }).join('');
   host.innerHTML = `<table><thead><tr>
       <th class="eye-col"><span class="sr-only">In the plot</span></th>
+      <th class="rank"><span class="sr-only">Rank</span></th>
       <th>Tool</th>${VERDICTS.map((v) => `<th class="num">${esc(v[0].toUpperCase() + v.slice(1))}</th>`).join('')}
       <th class="num">Time, finished (s)</th>
       <th class="num">Overhead (run, s)</th><th class="num">Overhead (prepare, s)</th>
