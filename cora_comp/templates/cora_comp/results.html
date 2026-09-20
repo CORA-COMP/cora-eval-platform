@@ -92,6 +92,22 @@
   th { color: var(--muted); font-weight: 600; white-space: nowrap; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+  th.eye-col, td.eye-col { width: 1%; padding-right: 0; }
+  .eye {
+    display: block; padding: 2px; border: 0; background: none; cursor: pointer;
+    color: var(--muted); line-height: 0; border-radius: 6px;
+  }
+  .eye:hover { color: var(--ink); background: var(--band); }
+  .eye:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  /* A hidden tool keeps its numbers — only the plot drops it — so the row is dimmed
+     rather than removed, and its own eye stays at full strength to be clicked back. */
+  tr.is-hidden td { opacity: .45; }
+  tr.is-hidden td.eye-col { opacity: 1; }
+  tr.is-hidden .eye { color: var(--ink); }
   .verdict-finished { color: #2e7d32; }
   .verdict-unsupported { color: var(--muted); }
   .verdict-error, .verdict-timeout, .verdict-prepare_failed { color: #c62828; }
@@ -262,6 +278,9 @@ const DEFAULT_PAGE_SIZE = 100;
 
 const state = {
   hoverRank: null,  // the cactus rank under the pointer, kept across live redraws
+  // Tools the eye column has switched off. The plot drops them and rescales; the summary
+  // still counts them. Kept across live redraws, like the hover.
+  hidden: new Set(),
   data: null, filters: {},  // one entry per facet, filled from the payload
   // The default view is the set arithmetic alone: run time, interface overhead removed.
   subtractOverhead: true, includePrepare: false, logScale: true,
@@ -712,6 +731,16 @@ function verdictCounts() {
   return byTool;
 }
 
+/** The eye of the first column: open when the tool is plotted, struck through when not. */
+function eyeIcon(off) {
+  return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
+    stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+    <path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/>
+    <circle cx="8" cy="8" r="2"/>
+    ${off ? '<path d="M2.5 2.5l11 11"/>' : ''}
+  </svg>`;
+}
+
 function renderSummary(series) {
   const host = el('summary');
   const counts = verdictCounts();
@@ -727,7 +756,10 @@ function renderSummary(series) {
   const rows = tools.map((tool) => {
     const c = counts.get(tool);
     const s = bySeries.get(tool);
-    return `<tr>
+    const off = state.hidden.has(tool);
+    return `<tr${off ? ' class="is-hidden"' : ''}>
+      <td class="eye-col"><button class="eye" data-tool="${esc(tool)}" aria-pressed="${off}"
+        title="${off ? 'Show in the plot' : 'Hide from the plot'}">${eyeIcon(off)}</button></td>
       <td><span class="swatch" style="background:${colorOf(tool)}"></span>${esc(tool)}${liveTag(tool)}</td>
       ${VERDICTS.map((v) => `<td class="num">${c ? c[v] : 0}</td>`).join('')}
       <td class="num">${s ? fmtTime(s.total) : '—'}</td>
@@ -736,10 +768,18 @@ function renderSummary(series) {
     </tr>`;
   }).join('');
   host.innerHTML = `<table><thead><tr>
+      <th class="eye-col"><span class="sr-only">In the plot</span></th>
       <th>Tool</th>${VERDICTS.map((v) => `<th class="num">${esc(v[0].toUpperCase() + v.slice(1))}</th>`).join('')}
       <th class="num">Time, finished (s)</th>
       <th class="num">Overhead (run, s)</th><th class="num">Overhead (prepare, s)</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
+  for (const button of host.querySelectorAll('.eye')) {
+    button.addEventListener('click', () => {
+      const tool = button.dataset.tool;
+      if (!state.hidden.delete(tool)) state.hidden.add(tool);
+      draw();
+    });
+  }
 }
 
 /** The rows the detail table shows: the page selection, narrowed by its own filters. */
@@ -870,7 +910,8 @@ function buildDetailFilters() {
 
 function draw() {
   const series = buildSeries();
-  renderPlot(series);
+  // The summary keeps every tool, so a hidden one still shows its counts and times.
+  renderPlot(series.filter((s) => !state.hidden.has(s.tool)));
   renderSummary(series);
   renderDetails();
 }
