@@ -86,9 +86,12 @@ class CoraCompetition(Competition):
 
         steps = []
         if task.tool is not None:
-            # Install as the user that runs the instances: whatever install leaves in
-            # $HOME (MATLAB's preferences folder) has to stay writable at run time.
-            steps += [add(kinds.CREATE), add("assign"), add(kinds.INSTALL, run_as_root=False)]
+            # Install as the user that runs the instances, so whatever install leaves in
+            # $HOME (MATLAB's preferences folder) stays writable at run time. A tool whose
+            # install needs a package manager opts out on submission.
+            install_as_root = bool(task.tool.extra.get("run_installation_script_as_root"))
+            steps += [add(kinds.CREATE), add("assign"),
+                      add(kinds.INSTALL, run_as_root=install_as_root)]
             benchmarks = Benchmark.objects.filter(
                 category=task.tool.category, published=True,
             )
