@@ -25,6 +25,8 @@ services:
       COMP_DOCKER_NAME_PREFIX: cora
       # "all" passes the host's GPUs into job containers (needs the NVIDIA runtime).
       COMP_DOCKER_GPU: "${COMP_DOCKER_GPU:-}"
+      # Which host GPUs, as nvidia-smi indices ("1", "0,1"); empty means all.
+      COMP_DOCKER_GPU_DEVICES: "${COMP_DOCKER_GPU_DEVICES:-}"
     command: >
       sh -c "pip install -q -e /core -e . &&
              exec python deploy/manage.py worker_service --host 0.0.0.0 --port 9001"

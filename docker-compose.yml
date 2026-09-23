@@ -55,6 +55,8 @@ services:
       # Pass the host's GPUs into node containers, for the catalog's gpu instances. Empty
       # by default: --gpus all fails outright on a host without the NVIDIA runtime.
       COMP_DOCKER_GPU: "${COMP_DOCKER_GPU:-}"
+      # Which host GPUs, as nvidia-smi indices ("1", "0,1"); empty means all.
+      COMP_DOCKER_GPU_DEVICES: "${COMP_DOCKER_GPU_DEVICES:-}"
     command: >
       sh -c "mkdir -p /root/.ssh &&
              [ -f /root/.ssh/comp.pem ] || ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/comp.pem &&
